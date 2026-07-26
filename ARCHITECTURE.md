@@ -43,6 +43,21 @@ The fourteen modules from the specification, and where each lives.
 | 13  | Source verification and audit history      | `supabase/` (`sources`, `verification_history`, `audit_logs`) | 1, 6  |
 | 14  | Analytics and error monitoring abstraction | `src/services/`                                               | 1     |
 
+Phase 7 added two supporting modules that are not on the specification's list of fourteen,
+because they support the whole app rather than one part of it:
+
+| Module                    | Location                                       | Phase |
+| ------------------------- | ---------------------------------------------- | ----- |
+| Data export and deletion  | `src/domain/account/`, `src/features/account/` | 7     |
+| Client-side rate limiting | `src/lib/rateLimit.ts`                         | 7     |
+
+The export follows the same split as everything else: `src/domain/account/exportDocument.ts`
+assembles the document from rows and is pure, so a test can assert the whole thing including
+its filename; `src/features/account/api/account.ts` does the fetching and the file writing.
+Account deletion is a single SECURITY DEFINER database function, `public.delete_own_account()`,
+which takes no arguments — the account deleted is always `auth.uid()`, so "delete somebody
+else" is not expressible rather than merely forbidden.
+
 Modules 1, 11, 13 and 14 have their Phase 1 foundations in place. Modules 2, 3 and 4 —
 authentication, card catalog and user wallet — are complete as of Phase 2; modules 7, 8 and
 9 — the rewards engine, the ranking engine and the explanation layer — as of Phase 3; and

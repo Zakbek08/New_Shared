@@ -62,12 +62,12 @@ in Node — with `expo-crypto` supplying the key and nonce bytes.
 `issuers` is writable only by catalog editors, so a member could never satisfy the
 foreign key.
 
-**Deferred to Phase 7:** data export and account deletion. Both are listed on the Settings
-screen as not-yet-built rather than silently missing.
+**Deferred to Phase 7, and delivered there:** data export and account deletion. Until then
+both were listed on the Settings screen as not-yet-built rather than silently missing.
 
-**Not yet done:** RLS _integration_ tests against real Postgres. The structural assertions
-in `schema.test.ts` prove the policies exist and are shaped correctly; proving User A
-cannot read User B's wallet needs a live database, and is scheduled for Phase 7.
+**Also completed in Phase 7:** RLS _integration_ tests against real Postgres. The structural
+assertions in `schema.test.ts` prove the policies exist and are shaped correctly; proving
+User A cannot read User B's wallet needs a live database. `npm run test:db` now does.
 
 ---
 
@@ -282,28 +282,58 @@ long expired.
 
 ---
 
-## Phase 7 — Review and hardening
+## Phase 7 — Review and hardening ✅ Complete
 
 **Security**
 
-- Full [SECURITY.md](SECURITY.md) checklist walked
-- **RLS integration tests against real Postgres** — the cross-user matrix in TESTING.md
-- Dependency audit; secret scan over history
-- Application-level rate limiting
+- ✅ **RLS integration tests against a real Postgres.** `npm run test:db` builds a throwaway
+  cluster, applies every migration and seed, and runs **70 assertions**: the cross-user
+  matrix per table, role-escalation refusals, catalog write refusals, append-only refusals,
+  the audit trail recording column names only, `anon` refused everything, and the delete
+  cascade. All 70 pass.
+- ✅ Dependency audit documented in [SECURITY.md](SECURITY.md) — 50 advisories, five root
+  causes, all build-time, with the reason no fix is applied and what would change that.
+- ✅ Secret scan over all 8 commits and 412 objects. No hits. The scan runs a negative
+  control first, because a scanner that finds nothing looks identical to one that is broken.
+- ✅ Application-level rate limiting — `src/lib/rateLimit.ts`, wired into the recommendation
+  pipeline and bulk import, and documented as advisory rather than as a security control.
+- ✅ Deferred Phase 2 features delivered: **data export** and **account deletion**.
 
 **Accessibility**
 
-- VoiceOver and TalkBack passes on every screen
-- Dynamic type at the largest OS setting
-- Contrast re-verified; reduced-motion respected
+- ✅ An enforceable audit — `src/components/accessibility.audit.test.ts` reads all 55
+  components and screens and fails on a touchable with no role or label, disabled font
+  scaling, a hard-coded line height, a literal `44`, or a screen with no heading.
+- ✅ Contrast re-verified; the palette suite already asserts WCAG 2.2 AA ratios.
+- ✅ Reduced motion: the app contains no animation, which the audit now asserts directly
+  rather than leaving as an implication.
+- ⚠️ **VoiceOver and TalkBack passes remain manual and are not done.** They need a device
+  and a person. The audit makes the mechanical half automatic so that the manual pass is
+  about whether an announcement makes sense, not about hunting for missing props.
 
 **Quality**
 
-- Coverage thresholds raised to their real targets
-- `public.cap_period_window()` cross-checked against `resolveCapWindow()` over a year
-- Documentation reconciled with the shipped code
+- ✅ Coverage thresholds raised from placeholders to just under measured: domain
+  98/94/100/98, everything else 62/63/46/62.
+- ✅ `public.cap_period_window()` cross-checked against `resolveCapWindow()` over **655
+  date-and-period combinations**, plus the three unbounded periods asserted explicitly.
+- ✅ Documentation reconciled with the shipped code.
 
-**Exit criteria:** no known security or accessibility defect. All tests pass with no skips.
+**Two defects the integration harness caught,** neither of which any unit test could have:
+
+1. `current_app_role()` was created in migration `0002` but reads `public.users`, created in
+   `0005`. Postgres analyses a `LANGUAGE sql` body at creation, so `supabase db reset` would
+   have failed on a clean database. The three authorisation helpers now live in
+   `20260701000550_authorisation_helpers.sql`, after the table.
+2. The migrations granted no table privileges to `authenticated` at all. It worked on hosted
+   Supabase only because the platform ships `ALTER DEFAULT PRIVILEGES` granting everything.
+   Grants are now explicit and per verb, so a table with no `UPDATE` policy also has no
+   `UPDATE` privilege.
+
+**Exit criteria:** met, with one stated exception. No known security defect; no known
+accessibility defect that a source audit can detect. All 1,844 unit tests and 70 database
+assertions pass, with no skips. The screen-reader passes are outstanding and named as such
+rather than claimed.
 
 ---
 

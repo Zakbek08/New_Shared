@@ -847,6 +847,11 @@ export interface Database {
       current_app_role: { Args: Record<never, never>; Returns: AppRole };
       is_admin: { Args: Record<never, never>; Returns: boolean };
       can_edit_catalog: { Args: Record<never, never>; Returns: boolean };
+      /**
+       * Takes no arguments by design: the account deleted is always the caller's,
+       * read from auth.uid(). See 20260703000100_account_deletion.sql.
+       */
+      delete_own_account: { Args: Record<never, never>; Returns: void };
     };
     Enums: {
       app_role: AppRole;

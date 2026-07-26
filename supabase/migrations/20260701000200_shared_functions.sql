@@ -15,55 +15,11 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- Authorisation helpers
--- ---------------------------------------------------------------------------
--- SECURITY DEFINER so it can read public.users without recursing through that
--- table's own RLS policies. search_path is pinned to defeat search-path
--- hijacking.
-create or replace function public.current_app_role()
-returns public.app_role
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select coalesce(
-    (select u.role from public.users u where u.id = auth.uid()),
-    'member'::public.app_role
-  );
-$$;
-
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.current_app_role() = 'admin'::public.app_role;
-$$;
-
--- Catalog editors and admins may both curate the shared card catalog.
-create or replace function public.can_edit_catalog()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.current_app_role() in (
-    'catalog_editor'::public.app_role,
-    'admin'::public.app_role
-  );
-$$;
-
-revoke all on function public.current_app_role() from public, anon;
-revoke all on function public.is_admin() from public, anon;
-revoke all on function public.can_edit_catalog() from public, anon;
-grant execute on function public.current_app_role() to authenticated;
-grant execute on function public.is_admin() to authenticated;
-grant execute on function public.can_edit_catalog() to authenticated;
+-- The authorisation helpers (current_app_role, is_admin, can_edit_catalog) read
+-- public.users, so they cannot be defined here: Postgres parses a LANGUAGE sql
+-- body at CREATE time and would reject a reference to a table that does not
+-- exist yet. They live in 20260701000550_authorisation_helpers.sql, immediately
+-- after the table.
 
 -- ---------------------------------------------------------------------------
 -- Cap-period window boundaries

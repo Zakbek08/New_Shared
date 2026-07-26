@@ -120,6 +120,28 @@ with check (
 **SECURITY DEFINER functions pin `search_path`** (`set search_path = public, pg_temp`),
 defeating search-path hijacking. Asserted in `schema.test.ts`.
 
+**Table privileges are granted explicitly, per table and per verb.** RLS decides which rows a
+role sees; `GRANT` decides whether it can ask at all. A hosted Supabase project ships
+`ALTER DEFAULT PRIVILEGES` granting everything to `anon`, `authenticated` and `service_role`,
+which means a migration that grants nothing still appears to work — while depending on a
+platform setting no reviewer can see in this repository, and handing every role every verb.
+Migration 0008 now states the grants, so an append-only table has no `UPDATE` privilege as
+well as no `UPDATE` policy, and a missing policy is a second lock rather than the only one.
+This was found by the integration tests, not by review.
+
+**These policies are executed, not just inspected.** `npm run test:db` builds a throwaway
+Postgres cluster, applies every migration and seed, and runs 70 assertions as `anon`, as two
+different members, as a catalog editor and as an admin. Structural assertions in
+`schema.test.ts` catch a missing policy; only a live database catches a wrong predicate. See
+[TESTING.md](TESTING.md).
+
+**Self-service deletion cannot delete anyone else.** `public.delete_own_account()` is
+SECURITY DEFINER — it has to be, because no client role may touch `auth`, and none should.
+It takes **no arguments**: the account deleted is always `auth.uid()`, so "delete somebody
+else" is unexpressible rather than merely forbidden. It raises `insufficient_privilege` when
+there is no session, rather than relying on `id = NULL` matching nothing. Its zero-argument
+signature and its grant to `authenticated` alone are both asserted in the integration tests.
+
 ### 6. Never log sensitive user or financial data
 
 `src/services/redaction.ts` is the enforcement, and every telemetry call routes through it.
@@ -203,6 +225,11 @@ credentials for millions of people.
 | History is tampered with                 | No UPDATE/DELETE policy on append-only tables                                              |
 | A user is misled by an unverified rate   | `verification_status` + `last_verified_at` surfaced; `verified` requires evidence by CHECK |
 | A bad migration removes a control        | `schema.test.ts` asserts the controls, so the build fails                                  |
+| A policy predicate is subtly wrong       | 70 assertions against a real Postgres, as five different roles (`npm run test:db`)         |
+| One user deletes another's account       | `delete_own_account()` takes no arguments; identity comes from the JWT                     |
+| An export leaks the encrypted last four  | Ciphertext and key id replaced with a marker; asserted in `exportDocument.test.ts`         |
+| An export silently omits a table         | Sections derived from the migrations, so a new personal table fails the build              |
+| A retry loop burns quota or money        | `src/lib/rateLimit.ts` on the classifier path and bulk import (advisory — see below)       |
 
 ### Accepted limitations
 
@@ -217,8 +244,96 @@ Stated plainly rather than papered over.
 - **Device encryption is only as strong as the device.** A rooted or jailbroken device can
   reach the keystore. The last four are low-value by design, which is why only they are
   stored.
-- **No rate limiting yet.** Supabase Auth provides some; application-level limits are a
-  Phase 7 item.
+- **Rate limiting is client-side and advisory.** `src/lib/rateLimit.ts` throttles the
+  expensive, abusable actions on the device, and Supabase Auth rate-limits sign-in
+  server-side. A determined caller with the anon key can bypass the client limiter
+  entirely; what stops them reading anything is RLS, not the limiter. The limiter exists
+  to protect the user from a runaway retry loop and the project from an accidental bill,
+  and it is honest about being nothing more than that. A server-side limit belongs in an
+  Edge Function and is not built.
+
+---
+
+## Dependency audit
+
+Run `npm audit` and read it against this section rather than reacting to the headline
+count.
+
+**As of the end of Phase 7: 50 advisories — 40 high, 10 moderate, 0 critical.**
+
+Every one of them reaches the project through build tooling, not through code that runs
+on a user's device. There are five distinct root advisories; the count is inflated because
+`npm audit` reports every package in every path to each one.
+
+| Root advisory                                     | Reached through                                                                    | Ships to the device? |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------- |
+| `brace-expansion` — DoS via unbounded expansion   | `minimatch` / `glob`, under `eslint`, `jest`, `@react-native/codegen`, `@expo/cli` | No                   |
+| `postcss` — path traversal via `sourceMappingURL` | `@expo/metro-config`, at bundle time                                               | No                   |
+| `postcss` — arbitrary file read via source maps   | same                                                                               | No                   |
+| `postcss` — XSS via unescaped `</style>`          | same; WalletWise ships no CSS and no web target                                    | No                   |
+| `uuid@7` — missing buffer bounds check            | `@expo/config-plugins` → `xcode`, at prebuild time                                 | No                   |
+
+Why no fix is applied:
+
+- **No fix exists that does not downgrade the framework.** Each advisory sits in a
+  transitive dependency pinned by `expo@54` / `react-native@0.81`. `npm audit fix --force`
+  resolves them by moving Expo off its supported version, which trades three
+  developer-machine advisories for an unsupported build toolchain. That is a worse
+  position, not a better one.
+- **The threat model does not reach them.** All five are exploited by feeding hostile
+  input to a build tool: a malicious glob pattern, a crafted CSS source map, an
+  attacker-controlled Xcode project. Reaching them requires already being able to run code
+  in the build, at which point the audit is not the problem.
+- **`npm audit --omit=dev` still reports 44,** because `expo` is a runtime dependency in
+  `package.json` even though `@expo/cli` within it is build-time only. The flag is not a
+  useful filter here, and quoting it as if it were would be misleading.
+
+What is checked at each phase boundary, and what would change the answer:
+
+- [ ] `npm audit` produces no **critical** advisory. One critical is a stop-and-fix,
+      regardless of where it sits.
+- [ ] No advisory names a package that appears in the shipped bundle. Anything reachable
+      at runtime is treated as critical whatever severity it carries, because it runs on a
+      user's phone.
+- [ ] The count has not grown without explanation. A new advisory gets a row above or a
+      fix, not silence.
+- [ ] `@noble/ciphers`, `@supabase/supabase-js`, `expo-secure-store`, `expo-file-system`
+      and `expo-sharing` are clean. These are the runtime dependencies that touch
+      encryption, the session or the exported file.
+
+---
+
+## Secret scanning
+
+`.env` is git-ignored and `.env.example` carries keys with no values, but neither fact
+proves nothing was ever committed — a secret removed in a later commit is still in the
+history and still readable from any clone.
+
+So the history is scanned, not just the working tree. Over all 8 commits and 412 objects,
+looking for: Supabase service-role JWTs (`eyJ…`), `SERVICE_ROLE_KEY=` with a value, PEM
+private keys, `sk-` / `sk_live_` API keys, GitHub tokens (`ghp_`, `github_pat_`), AWS
+access-key ids (`AKIA…`), Slack tokens (`xox…`), and connection strings with an inline
+password.
+
+**Result: no hits. `.env.example` is the only environment file ever tracked.**
+
+One methodological note, because it is the part that is easy to get wrong: a scanner that
+matches nothing is indistinguishable from a scanner that is broken. The first version of
+this scan reported zero hits because its JWT pattern required a longer segment than the
+test secret had — a clean bill of health from a scanner that could not have found
+anything. Every run is therefore preceded by a negative control: three planted secrets of
+realistic shape in a scratch file, all three of which must be detected before the real
+result is believed.
+
+### The one deliberate match
+
+`4111111111111111` appears in `SECURITY.md`, `PRIVACY_NOTES.md`,
+`src/domain/schemas.test.ts`, `src/lib/lastFour.test.ts`, `src/services/redaction.ts` and
+`src/services/redaction.test.ts`.
+
+This is the canonical Visa **test** number, present on purpose: it is the input that proves
+`noCredentials()` rejects a PAN and that the redaction layer scrubs one. It is not a card,
+it belongs to nobody, and removing it would delete the tests that enforce requirement 1.
 
 ---
 

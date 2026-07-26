@@ -139,6 +139,8 @@ supabase db reset         # applies migrations, then loads the fictional seed da
 | `npm run format`                                  | Prettier, writing changes                                                |
 | `npm run format:check`                            | Prettier, checking only                                                  |
 | `npm run verify`                                  | **Format check, lint, typecheck and tests — run this before committing** |
+| `npm run test:db`                                 | Row-level-security and cap-window tests against a real Postgres          |
+| `npm run verify:all`                              | `verify` plus `test:db`. Needs a local Postgres server                   |
 
 ---
 

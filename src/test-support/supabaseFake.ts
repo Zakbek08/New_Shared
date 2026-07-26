@@ -22,6 +22,8 @@ export interface TableResult {
 /** One queued response per `from()` call, in order. */
 export interface FakeConfig {
   readonly results?: readonly TableResult[];
+  /** Keyed by function name, so `rpc()` order does not have to be guessed. */
+  readonly rpcResults?: Readonly<Record<string, TableResult>>;
   readonly user?: { id: string; email?: string | null } | null;
   readonly authError?: { message: string; status?: number } | null;
 }
@@ -33,6 +35,8 @@ export interface SupabaseFake {
   readonly tables: string[];
   /** Payloads passed to `insert()` / `update()`, in order. */
   readonly writes: unknown[];
+  /** Function names passed to `rpc()`, with their arguments, in order. */
+  readonly rpcCalls: { name: string; args: unknown }[];
 }
 
 function buildClient(config: FakeConfig, sink: SupabaseFake) {
@@ -131,6 +135,14 @@ function buildClient(config: FakeConfig, sink: SupabaseFake) {
       sink.tables.push(table);
       return makeBuilder();
     },
+    // Recorded rather than stubbed per-test, because *which* function was called
+    // and with what is the security-relevant fact for delete_own_account: it must
+    // be called with no arguments at all.
+    rpc: (name: string, args?: unknown) => {
+      sink.rpcCalls.push({ name, args });
+      const queued = config.rpcResults?.[name] ?? {};
+      return Promise.resolve({ data: queued.data ?? null, error: queued.error ?? null });
+    },
     auth: {
       getUser: () =>
         Promise.resolve({
@@ -155,6 +167,7 @@ export function createSupabaseFake(config: FakeConfig = {}): SupabaseFake {
     calls: [],
     tables: [],
     writes: [],
+    rpcCalls: [],
   } as unknown as SupabaseFake;
 
   (sink as { client: unknown }).client = buildClient(config, sink);

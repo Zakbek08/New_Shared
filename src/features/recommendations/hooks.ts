@@ -30,6 +30,8 @@ import {
 import { useAuth } from '@/features/auth/AuthProvider';
 import { recordRewardUsage } from '@/features/caps/api/usage';
 import { queryKeys } from '@/lib/queryKeys';
+import { DataError } from '@/lib/errors';
+import { appRateLimiter, describeRetryDelay } from '@/lib/rateLimit';
 import { captureException } from '@/services/analytics';
 
 import {
@@ -104,6 +106,17 @@ export function useRecommend() {
   return useMutation<RecommendationOutcome, unknown, RecommendInput>({
     retry: 0,
     mutationFn: async ({ purchase, rawNaturalLanguageInput, asOf }) => {
+      // 0. Rate limit (impure, and first: the point is to refuse before spending
+      //    a classifier call and two inserts). `asOf` is the caller's clock, which
+      //    keeps this decision as reproducible as the rest of the pipeline.
+      const decision = appRateLimiter.attempt('purchase_query', asOf.getTime());
+      if (!decision.isAllowed) {
+        throw new DataError(
+          'rate_limited',
+          `That is a lot of purchases in a short time. ${describeRetryDelay(decision.retryAfterMs)}`,
+        );
+      }
+
       // 1. Merchant catalog (impure)
       const merchants = await listMerchantsForClassification(purchase.countryCode);
 

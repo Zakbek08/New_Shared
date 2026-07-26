@@ -13,9 +13,77 @@
 -- Verified by the checklist in SECURITY.md.
 -- ============================================================================
 
--- Baseline grants. Without an accompanying policy these grants still yield
--- zero rows, but they are required for policies to be reachable at all.
+-- ---------------------------------------------------------------------------
+-- Baseline table privileges
+-- ---------------------------------------------------------------------------
+-- RLS narrows what a role can see; GRANT decides whether it can ask at all.
+-- Both are needed, and they are deliberately stated here rather than inherited.
+--
+-- WHY THESE ARE EXPLICIT
+-- A hosted Supabase project ships `alter default privileges ... grant all on
+-- tables to anon, authenticated, service_role`, so a migration that grants
+-- nothing still appears to work there. That makes the schema depend on a
+-- platform setting no reviewer can see in this repository, and it hands every
+-- role every verb — including UPDATE on tables that are meant to be append-only,
+-- where the only thing standing in the way is the absence of a policy. Granting
+-- per table and per verb means a missing policy is a second lock, not the only
+-- one. It also makes the migration set replayable on any Postgres, which is what
+-- supabase/tests/ runs against.
+--
+-- The privilege granted is the *union* of what the policies below allow; the
+-- policies still decide which rows. Where no policy exists for a verb, the verb
+-- is not granted either.
 revoke all on all tables in schema public from anon;
+
+-- anon gets nothing at all. Every route in this app requires a session.
+
+-- Reference catalog: readable by any signed-in user, written only by curators
+-- (enforced by the *_write policies, which call public.can_edit_catalog()).
+grant select, insert, update, delete on
+  public.issuers,
+  public.reward_programs,
+  public.card_products,
+  public.merchant_categories,
+  public.merchants,
+  public.sources,
+  public.reward_rules,
+  public.reward_rule_conditions
+to authenticated;
+
+-- User-owned data: full CRUD, scoped to the owner by the policies below.
+grant select, insert, update, delete on
+  public.user_cards,
+  public.user_reward_preferences,
+  public.user_rule_enrollments,
+  public.user_offers,
+  public.reward_usage,
+  public.recommendations
+to authenticated;
+
+-- No UPDATE: a recorded query and its candidate set are history. There is no
+-- update policy for either, and now no privilege either.
+grant select, insert, delete on
+  public.purchase_queries,
+  public.recommendation_candidates
+to authenticated;
+
+-- users: a row is created by the signup trigger and removed by cascade, so the
+-- client needs neither INSERT nor DELETE. UPDATE is allowed but users_update_self
+-- pins `role`, so this cannot be a privilege-escalation path.
+grant select, update on public.users to authenticated;
+
+-- Append-only. The absence of an UPDATE/DELETE policy already refuses these;
+-- withholding the privilege makes the refusal a 42501 instead of a silent
+-- zero-row result, which is easier to spot in a log.
+grant select, insert on public.verification_history to authenticated;
+
+-- audit_logs is written only by walletwise_private.audit_catalog_change(), which
+-- is SECURITY DEFINER. No client may insert into it.
+grant select on public.audit_logs to authenticated;
+
+-- service_role is used by server-side code only and never reaches the device.
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
 
 alter table public.users                     enable row level security;
 alter table public.issuers                   enable row level security;

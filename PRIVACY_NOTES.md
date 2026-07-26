@@ -135,8 +135,21 @@ by tests rather than assumed.
 
 ## Deleting your account
 
+Settings → **Delete your account**. You type `DELETE` to confirm, because a second tap on a
+dialog lands on muscle memory before the sentence is read, and this cannot be undone.
+
 Deleting the `auth.users` row cascades to every table that references it. Your profile,
-wallet, preferences, enrollments, offers, cap history, queries and recommendations all go.
+wallet, preferences, enrollments, offers, cap history, queries and recommendations all go. It
+happens in one database transaction, so there is no half-deleted state.
+
+The encryption key for any stored card digits is wiped from the device at the same time —
+after the account is gone, not before. If the order were reversed and the deletion then
+failed, your account would survive holding digits nobody, including you, could ever decrypt.
+
+Only you can do it. `public.delete_own_account()` takes no arguments: the account it deletes
+is always the one in your session token, so "delete somebody else's account" is not something
+the function can express. That is asserted in `supabase/tests/10_rls.sql`, along with the
+fact that a signed-out caller cannot call it at all.
 
 Two things survive by design, and neither identifies you:
 
@@ -148,9 +161,29 @@ Two things survive by design, and neither identifies you:
 
 ## Data export
 
-Phase 2 adds an export of everything in the tables listed above, as JSON. The export goes
-through the same redaction path for logging purposes but the file itself is complete — it is
-your data.
+Settings → **Export your data**. You get a JSON file containing everything in the tables
+listed above: your profile, your cards, your reward valuations, your enrollments, your offers,
+your recorded spending against caps, every purchase you asked about and the recommendation
+given, the per-card breakdown behind each one, any custom cards and rates you entered
+yourself, and any audit rows you are party to. Thirteen sections in all.
+
+The file is complete because it is your data. The one thing it does not contain in readable
+form is any card digits you stored: those are encrypted with a key that never leaves your
+device, and the file marks them as encrypted rather than showing them. Writing them out in
+plaintext would undo the reason the column is encrypted in the first place, and you already
+know your own last four.
+
+There is no card number, security code or PIN in the file, because WalletWise never stores
+one.
+
+**How we know it is actually complete.** A test could easily confirm the export matches a
+list somebody wrote by hand — and confirm nothing. So the test reads the database migrations
+instead, works out which tables hold personal data from the row-level-security rules applied
+to them, and fails if any of them has no section in the export. That check is what caught the
+export missing custom cards and the rates entered for them.
+
+Only counts reach analytics — how many sections, how many records. Never a row, never a
+filename, never anything you typed.
 
 ---
 

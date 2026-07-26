@@ -2,17 +2,19 @@
  * Screen 14 — Settings.
  *
  * Appearance control is real in Phase 1, because dark mode is a Phase 1
- * deliverable. The rest routes to its own screen or names its phase.
+ * deliverable. Data export and account deletion arrived in Phase 7; everything
+ * else routes to its own screen.
  */
 import { useRouter } from 'expo-router';
 
-import { PlaceholderSection } from '@/components/PlaceholderSection';
 import { ErrorNotice } from '@/components/StateViews';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { HStack, VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
+import { DataExportCard } from '@/features/account/ui/DataExportCard';
+import { DeleteAccountCard } from '@/features/account/ui/DeleteAccountCard';
 import { useProfile, useSignOut } from '@/features/auth/hooks';
 import { useThemePreference, type ThemePreference } from '@/theme/ThemeProvider';
 
@@ -134,12 +136,9 @@ export default function SettingsScreen() {
           </VStack>
         </Card>
 
-        <PlaceholderSection
-          phase="Phase 7"
-          title="Export and delete your account"
-          description="Download everything WalletWise holds about you as JSON, or delete your account. Deleting removes every row you own by database cascade, and wipes this device's encryption key."
-          testID="settings-account-data"
-        />
+        <DataExportCard />
+
+        <DeleteAccountCard />
       </VStack>
     </Screen>
   );

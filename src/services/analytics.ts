@@ -40,6 +40,9 @@ export const ANALYTICS_EVENTS = [
   'catalog_rule_verified',
   'catalog_rules_imported',
   'catalog_access_denied',
+  // Counts only, never the exported document or any row from it.
+  'account_data_exported',
+  'account_deleted',
 ] as const;
 
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];

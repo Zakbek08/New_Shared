@@ -24,30 +24,39 @@ module.exports = {
     '!src/types/database.ts',
   ],
   // Thresholds are a floor, not a target. The engine's are high because it is
-  // pure, total and has no excuse; the global figure is dragged down by UI
-  // scaffolding whose behaviour arrives in later phases.
+  // pure, total and has no excuse; the global figure is lower because it includes
+  // presentational code whose correctness is asserted through the screens that
+  // compose it rather than file by file.
   //
   // Note: a path-specific threshold *removes* those files from the global
   // calculation, so the global numbers below describe everything outside
   // `src/domain/`.
+  //
+  // RAISED IN PHASE 7 TO SIT JUST UNDER WHAT IS MEASURED.
+  // Phase 1–6 used placeholder floors that were far below reality, which meant
+  // coverage could fall by twenty points without the build noticing — a floor
+  // nothing can touch is not a floor. These are set a point or two under the
+  // measured figures at the end of Phase 7 (domain 98.6/94.3/100, everything else
+  // 63.5/65.1/47.9), close enough that deleting a test suite fails the build and
+  // loose enough that an ordinary refactor does not.
   coverageThreshold: {
     './src/domain/rewards/': {
-      statements: 95,
-      branches: 92,
-      functions: 98,
-      lines: 95,
+      statements: 98,
+      branches: 93,
+      functions: 100,
+      lines: 98,
     },
     './src/domain/': {
-      statements: 95,
-      branches: 92,
-      functions: 95,
-      lines: 95,
+      statements: 98,
+      branches: 94,
+      functions: 100,
+      lines: 98,
     },
     global: {
-      statements: 55,
-      branches: 55,
-      functions: 40,
-      lines: 55,
+      statements: 62,
+      branches: 63,
+      functions: 46,
+      lines: 62,
     },
   },
 };

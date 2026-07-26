@@ -568,22 +568,119 @@ now deliberately broader than today's call sites, and the reason is recorded bes
 
 ---
 
-## Integration and RLS testing (Phase 7)
+## Phase 7 coverage — 5 further suites
 
-Structural RLS assertions catch a missing policy but not a wrong predicate. Phase 7 adds
-tests against a real local Postgres:
+| Suite                                                | What it pins                                                           |
+| ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/domain/account/exportDocument.test.ts`          | Export completeness, derived from the migrations, not from a hand list |
+| `src/features/account/api/account.test.ts`           | Read order, ciphertext never written, deletion ordering                |
+| `src/features/account/ui/DeleteAccountCard.test.tsx` | The typed-confirmation gate                                            |
+| `src/features/account/ui/DataExportCard.test.tsx`    | What the card promises the user                                        |
+| `src/lib/rateLimit.test.ts`                          | Sliding-window arithmetic at every boundary                            |
+| `src/components/accessibility.audit.test.ts`         | A repo-wide accessibility audit over all 55 components and screens     |
+
+### The export's promise is checked against the schema
+
+`buildAccountExport` claims to contain everything WalletWise holds about a user. A test that
+compared it to a hand-written list would only ever confirm the list.
+
+So `exportDocument.test.ts` reads the migrations and derives the set of tables holding
+personal data from two signals it finds there: `force row level security`, which migration
+0008 applies to exactly the user-owned tables for a security reason nobody will skip, and any
+policy named `*_own*`, which is how a user's own rows in the shared catalog tables are
+scoped. Thirteen tables come back, and every one must map to a section.
+
+This is what caught the export missing `card_products`, `reward_rules` and
+`reward_rule_conditions` — a user's _custom_ card and the rates they typed for it, which live
+in catalog tables next to shared rows and are easy to forget precisely because of that.
+
+### The accessibility audit is a source scan, and says what it cannot do
+
+Component tests only cover components that have a test. The failure that actually happens is
+a new `Pressable` in a new screen with no label. So the audit reads every `.tsx` in
+`src/components`, `src/features` and `app/` — 55 files — and fails on a touchable whose role
+or label count is lower than its opening count, `allowFontScaling={false}`, a hard-coded
+`lineHeight`, a literal `44` where `MIN_TOUCH_TARGET` belongs, or a screen with no
+`accessibilityRole="header"`.
+
+It cannot simulate a screen-reader gesture. VoiceOver and TalkBack passes stay manual and are
+listed as outstanding in [ROADMAP.md](ROADMAP.md) rather than implied to be done.
+
+One check is currently vacuous and says so in its own assertion: nothing in the app animates,
+so the reduced-motion check examines nothing. Rather than let a green tick imply handling
+that is not exercised, a separate test asserts _that_ — zero animating files — and will fail
+the moment an animation is added, at which point the reduced-motion check starts doing real
+work.
+
+---
+
+## Integration and RLS testing — `npm run test:db`
+
+Structural RLS assertions catch a missing policy but not a wrong predicate. This is a
+separate command from `npm test` because it needs a Postgres binary; wiring it into the unit
+suite would mean either failing on every machine without Postgres or skipping silently, and a
+suite that silently skips its most important tests is worse than one that does not claim to
+run them.
+
+`scripts/db-test.mjs` creates a throwaway cluster, applies the `auth` shim, all 11 migrations
+and all 5 seed files, then runs **70 assertions**:
 
 - User A cannot read, update or delete any of User B's rows, per table
 - A `member` cannot write to the catalog
 - A `member` cannot set their own `role` to `admin`
-- A user cannot attach an offer or enrollment to another user's card
+- A user cannot attach an offer, enrollment or usage row to another user's card
 - `UPDATE` and `DELETE` on `verification_history` and `audit_logs` fail
 - `INSERT INTO audit_logs` from a client session fails
-- Deleting an `auth.users` row cascades away every owned row
-- `public.cap_period_window()` agrees with `resolveCapWindow()` across a year of dates
+- An editor's edit is audited, recording column names and no values
+- `anon` is refused every table
+- Deleting an `auth.users` row cascades away every owned row and leaves the catalog intact
+- `delete_own_account()` deletes the caller and only the caller, takes no arguments, and is
+  not executable by `anon`
+- `public.cap_period_window()` agrees with `resolveCapWindow()` across **655 date-and-period
+  combinations**, plus the three unbounded periods asserted explicitly
 
 That last one matters: two implementations of the same rule will drift unless something
-compares them.
+compares them. The expected values are computed by the TypeScript implementation and written
+into the generated SQL, so the comparison is genuinely between the two and not SQL against
+itself.
+
+### The shim, and what stays real
+
+`supabase/tests/00_bootstrap.sql` recreates only what plain Postgres lacks: the three
+Supabase roles, `auth.users`, and `auth.uid()`. Everything that matters is the real thing —
+the policy predicates, the `SECURITY DEFINER` helpers, the `FORCE` flags, the cascade
+behaviour. `auth.uid()` reads the same `request.jwt.claims` setting Supabase's own
+implementation reads, so a test that sets the claim exercises the code path a signed-in
+client does.
+
+`wwtest.refuses()` treats both refusal shapes as a pass — 42501 on an INSERT, zero rows on a
+SELECT, UPDATE or DELETE — and records which happened. Any _other_ error is a failure, not a
+pass, because a helper that treated every exception as a refusal would pass on a typo.
+
+### The harness proves it can fail
+
+"70 assertions, 70 passed" is worth nothing from a harness that cannot report a failure. Two
+deliberately-false assertions were appended, the run reported both as `✕` and exited 1, and
+they were then removed. The same discipline applies to the secret scan in
+[SECURITY.md](SECURITY.md), whose first version reported a clean history because its pattern
+could not match the test secret.
+
+### Two defects it caught immediately
+
+Neither was reachable from a unit test, because both are properties of the migration set as a
+sequence rather than of any file:
+
+1. **`current_app_role()` was defined before the table it reads.** It was in migration
+   `0002`; `public.users` arrives in `0005`. Postgres analyses a `LANGUAGE sql` body at
+   `CREATE` time, so this failed outright — meaning `supabase db reset` had never been run
+   against a clean database. The three authorisation helpers moved to
+   `20260701000550_authorisation_helpers.sql`. The `plpgsql` functions in `0002` are only
+   syntax-checked, which is why they could stay.
+2. **No table privileges were granted to `authenticated`.** The migration's own comment
+   claimed it handled baseline grants; it only revoked from `anon`. On hosted Supabase this
+   works by accident, because the platform ships `ALTER DEFAULT PRIVILEGES` granting
+   everything to every role. Grants are now explicit and per verb, so an append-only table
+   has no `UPDATE` privilege as well as no `UPDATE` policy.
 
 ---
 
@@ -591,15 +688,24 @@ compares them.
 
 Thresholds in `jest.config.js` are a floor, not a target:
 
-| Scope                 | Statements | Branches | Functions | Lines |
-| --------------------- | ---------- | -------- | --------- | ----- |
-| `src/domain/rewards/` | 95         | 92       | 98        | 95    |
-| `src/domain/`         | 95         | 92       | 95        | 95    |
-| Everything else       | 55         | 55       | 40        | 55    |
+| Scope                 | Statements | Branches | Functions | Lines | Measured (end of Phase 7) |
+| --------------------- | ---------- | -------- | --------- | ----- | ------------------------- |
+| `src/domain/rewards/` | 98         | 93       | 100       | 98    | 98.2 / 94.0 / 100         |
+| `src/domain/`         | 98         | 94       | 100       | 98    | 98.6 / 94.3 / 100         |
+| Everything else       | 62         | 63       | 46        | 62    | 63.5 / 65.1 / 47.9        |
 
-The engine's are high because it is pure, total and has no excuse. The global figure is
-dragged down by UI scaffolding whose behaviour arrives in Phases 5-6, and should rise with
-each phase — it stood at 55% after Phase 3 and is 77% after Phase 4.
+The engine's are high because it is pure, total and has no excuse. The global figure is lower
+because it includes presentational code whose correctness is asserted through the screens that
+compose it rather than file by file.
+
+**Raised in Phase 7 to sit just under measured.** Phases 1-6 used placeholder floors far below
+reality — 55/55/40 against an actual 63.5/65.1/47.9 — which meant coverage could fall twenty
+points without the build noticing. A floor nothing can touch is not a floor. The figures above
+are close enough that deleting a suite fails the build and loose enough that an ordinary
+refactor does not.
+
+Whole-project figures, for reference: **74.5% statements, 74.3% branches, 60.3% functions,
+75.6% lines** across 1,844 tests in 63 suites, plus 70 database assertions.
 
 Note that a path-specific threshold _removes_ those files from the global calculation, so
 the global row describes everything outside `src/domain/`.

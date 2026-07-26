@@ -18,6 +18,8 @@ import type {
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useProfile } from '@/features/auth/hooks';
 import { queryKeys } from '@/lib/queryKeys';
+import { DataError } from '@/lib/errors';
+import { appRateLimiter, describeRetryDelay } from '@/lib/rateLimit';
 import type { AppRole } from '@/types/database';
 
 import {
@@ -201,7 +203,18 @@ export function useBulkImport() {
   const invalidate = useCatalogInvalidation();
 
   return useMutation({
-    mutationFn: (rules: readonly RewardRuleInput[]) => bulkInsertRewardRules(rules),
+    mutationFn: (rules: readonly RewardRuleInput[]) => {
+      // A bulk import writes many catalog rows at once, and the catalog is shared.
+      // A stuck retry here would multiply rules across everybody's wallet.
+      const decision = appRateLimiter.attempt('bulk_import', Date.now());
+      if (!decision.isAllowed) {
+        throw new DataError(
+          'rate_limited',
+          `Too many imports in a row. ${describeRetryDelay(decision.retryAfterMs)}`,
+        );
+      }
+      return bulkInsertRewardRules(rules);
+    },
     onSuccess: invalidate,
   });
 }
