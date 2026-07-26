@@ -3,7 +3,12 @@
  * invisible: every MCC range would simply be one wider, and the engine would pay a
  * bonus at a merchant that does not qualify for it.
  */
-import { parseInt4Range, parseInt4Ranges } from './int4range';
+import {
+  formatInt4Range,
+  formatInt4Ranges,
+  parseInt4Range,
+  parseInt4Ranges,
+} from './int4range';
 
 describe('parseInt4Range', () => {
   it('converts the canonical half-open form Postgres returns', () => {
@@ -73,5 +78,51 @@ describe('parseInt4Ranges', () => {
 
   it('returns an empty array for an empty column', () => {
     expect(parseInt4Ranges([])).toEqual([]);
+  });
+});
+
+describe('formatInt4Range', () => {
+  it('writes an inclusive single code as the canonical half-open literal', () => {
+    // The engine's `[5411, 5411]` is Postgres's `[5411,5412)`.
+    expect(formatInt4Range([5411, 5411])).toBe('[5411,5412)');
+  });
+
+  it('writes a span', () => {
+    expect(formatInt4Range([5811, 5814])).toBe('[5811,5815)');
+  });
+
+  it('round-trips through the parser', () => {
+    // The property that matters: a range written by the admin editor and read back by
+    // the engine must be the same range. An asymmetry here widens every MCC range by
+    // one code, invisibly.
+    for (const range of [
+      [1, 1],
+      [5411, 5411],
+      [5811, 5814],
+      [9999, 9999],
+    ] as const) {
+      expect(parseInt4Range(formatInt4Range(range))).toEqual([...range]);
+    }
+  });
+
+  it('refuses a range that starts above it ends', () => {
+    expect(() => formatInt4Range([5814, 5811])).toThrow(RangeError);
+  });
+
+  it('refuses a non-integer bound', () => {
+    expect(() => formatInt4Range([5411.5, 5412])).toThrow(RangeError);
+  });
+
+  it('formats a whole column', () => {
+    expect(
+      formatInt4Ranges([
+        [5411, 5411],
+        [5811, 5814],
+      ]),
+    ).toEqual(['[5411,5412)', '[5811,5815)']);
+  });
+
+  it('formats an empty column as an empty array', () => {
+    expect(formatInt4Ranges([])).toEqual([]);
   });
 });

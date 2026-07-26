@@ -231,18 +231,54 @@ rest would mean re-deriving a calculation instead of reading one.
 
 ---
 
-## Phase 6 — Administrative catalog and verification
+## Phase 6 — Administrative catalog and verification ✅ Complete
 
-- Role-gated access (`catalog_editor`, `admin`) — enforced by RLS, not by hiding the screen
-- Rule editor covering every condition field
-- Condition builder for MCC ranges and merchant include/exclude lists
-- Verification workflow: source URL, verified date, append to `verification_history`
-- Automatic staleness flagging past the freshness window
-- Audit-history viewer
-- Bulk import with a validation report
+**Delivered — the pure layer**
 
-**Exit criteria:** an editor can create, verify and retire a rule. A `member` is refused by
-the database, not merely by the UI. Every write is audited.
+- `domain/catalog/staleness.ts` — a verification decays. Past a 90-day window a rule is
+  treated as **stale** whatever its `verification_status` column says, and the review queue
+  is ordered never-verified → stale → due-soon → fresh. Derived rather than stored: a
+  scheduled job would leave a rule falsely "verified" until it next ran, and this is correct
+  the instant the window passes.
+- `domain/catalog/bulkImport.ts` — validates a pasted batch row by row against the same
+  `rewardRuleSchema` the editor uses, and reports per-row failures with field and message.
+  Writes nothing; the caller decides.
+- `rewardRuleConditionSchema` and `sourceSchema` — every condition field, plus the
+  contradictions that make a rule unsatisfiable (a category both required and excluded).
+
+**Delivered — the screens**
+
+- Rule editor covering every rule field, with the cap/period pairing and the
+  "verified needs a source and a date" rule enforced before a round trip
+- Condition builder for inclusive MCC ranges, merchant include/exclude, categories,
+  country, channel, payment method and amount bounds — warning while nothing is set,
+  because an empty condition matches _every_ purchase
+- Verification panel: choose a source, record the outcome and the rate you read, append to
+  an immutable history. Only `verified` stamps the date; "out of date" is not offered
+  because it is derived.
+- Review queue with freshness bands, retire/reinstate, and a per-band tally
+- Bulk import with the validation report shown _before_ any write
+- Audit-history viewer, stating in the UI that it records column names and never values
+
+**Exit criteria — met, each as a test.**
+
+- _An editor can create, verify and retire a rule._
+  `features/admin/api/catalog.test.ts` drives all three: the exact insert payload; a
+  verification that writes `verification_history` **first** (append-only, so it cannot be
+  rolled back) then the rule; and a retire that sets `is_active = false` rather than
+  deleting.
+- _A member is refused by the database, not merely by the UI._ Seven write paths are each
+  driven with SQLSTATE 42501 — what Postgres returns when RLS refuses — and each must
+  surface as a `forbidden` error with a permission message. `app/admin/catalog.test.tsx`
+  asserts the screen says the same thing in words.
+- _Every write is audited._ The trigger has existed since Phase 1;
+  `listAuditLog` exposes it, and the viewer states that only column names are recorded.
+
+**One design note.** Retiring, not deleting. A deleted rule would orphan the
+recommendations, cap-usage rows and verification history that point at it, and an old
+answer would stop being explainable — which is the property Phase 4 was built around.
+Reinstating returns a rule as `unverified`, because whatever verification it once had has
+long expired.
 
 ---
 

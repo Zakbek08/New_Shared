@@ -49,6 +49,13 @@ device before they are sent, so the server never sees them in plaintext.
 
 ## Status
 
+**Phase 6 complete.** The catalog every recommendation reads from is now curated in the
+app: a rule editor, a condition builder down to inclusive MCC ranges, a verification
+workflow with an append-only history, a review queue ordered by how stale each rate is, and
+a bulk importer that shows you what it would reject before it writes anything. Editing is
+gated by the **database**, not by the screen — a member can reach every button and each
+write comes back refused.
+
 **Phase 5 complete.** On top of the end-to-end recommendation, WalletWise now tracks the
 things that quietly change the answer: how much of each capped bonus is left and when it
 resets, which rotating category is running and whether you have activated it, which offers
@@ -72,15 +79,15 @@ is traced to the seed rule that produced it.
 | 3     | Deterministic rewards engine and its test matrix  | ✅ Complete    |
 | 4     | Purchase form and recommendation UI               | ✅ Complete    |
 | 5     | User offers, spending caps, reward preferences    | ✅ Complete    |
-| 6     | Administrative catalog and verification workflow  | ⬜ Not started |
+| 6     | Administrative catalog and verification workflow  | ✅ Complete    |
 | 7     | Security review, accessibility review, docs       | ⬜ Not started |
 
-1,527 tests across 50 suites. `src/domain/` sits at 99% statements and 96% branches, and
+1,730 tests across 57 suites. `src/domain/` sits at 99% statements and 96% branches, and
 those floors are enforced in `jest.config.js` rather than merely reported.
 
-The one region still awaiting a later phase — the administrative catalog and the source
-history behind each rate — says so on screen, with the phase named, rather than displaying
-placeholder numbers that could be mistaken for real rewards.
+Every screen now renders real data. What remains for Phase 7 is review and hardening:
+RLS integration tests against a live Postgres, data export and account deletion, and a
+full accessibility pass.
 
 ---
 

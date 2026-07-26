@@ -357,6 +357,125 @@ export const rewardRuleSchema = z
 
 export type RewardRuleInput = z.infer<typeof rewardRuleSchema>;
 
+export type RewardRuleFormValues = z.input<typeof rewardRuleSchema>;
+
+/**
+ * An inclusive MCC range, `[from, to]`.
+ *
+ * Inclusive on both ends because that is what the engine works in. The conversion
+ * to Postgres's half-open `[from, to+1)` happens at the data boundary — see
+ * `src/lib/int4range.ts`. Getting that conversion wrong widens every range by one
+ * code, so the two forms are deliberately kept apart.
+ */
+export const mccRangeSchema = z
+  .tuple([mccSchema, mccSchema])
+  .refine(([from, to]) => from <= to, {
+    message: 'The first code must not be higher than the second',
+  });
+
+/**
+ * One condition row on a reward rule.
+ *
+ * Every populated field must be satisfied for the rule to apply, and all rows on a
+ * rule are ANDed — so an empty condition means "no constraint", not "matches
+ * nothing". The editor says so, because the difference is the whole rule.
+ */
+export const rewardRuleConditionSchema = z
+  .object({
+    rewardRuleId: uuidSchema,
+    merchantCategoryId: uuidSchema.nullable().default(null),
+    includedCategoryIds: z.array(uuidSchema).max(20).default([]),
+    excludedCategoryIds: z.array(uuidSchema).max(20).default([]),
+    includedMccs: z.array(mccSchema).max(50).default([]),
+    includedMccRanges: z.array(mccRangeSchema).max(20).default([]),
+    excludedMccs: z.array(mccSchema).max(50).default([]),
+    includedMerchantIds: z.array(uuidSchema).max(100).default([]),
+    excludedMerchantIds: z.array(uuidSchema).max(100).default([]),
+    includedCountryCodes: z.array(countryCodeSchema).max(50).default([]),
+    excludedCountryCodes: z.array(countryCodeSchema).max(50).default([]),
+    includedCurrencyCodes: z.array(currencyCodeSchema).max(50).default([]),
+    channel: z.enum(['online', 'in_store', 'either']).default('either'),
+    includedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).max(9).default([]),
+    startsAt: z.coerce.date().nullable().default(null),
+    endsAt: z.coerce.date().nullable().default(null),
+    minAmountUsd: z.coerce.number().min(0).max(1_000_000).nullable().default(null),
+    maxAmountUsd: z.coerce.number().min(0).max(1_000_000).nullable().default(null),
+    notes: safeTextSchema(500, 'Notes').optional(),
+  })
+  .refine(
+    (condition) =>
+      condition.startsAt === null ||
+      condition.endsAt === null ||
+      condition.startsAt < condition.endsAt,
+    { path: ['endsAt'], message: 'The end date must be after the start date' },
+  )
+  .refine(
+    (condition) =>
+      condition.minAmountUsd === null ||
+      condition.maxAmountUsd === null ||
+      condition.minAmountUsd <= condition.maxAmountUsd,
+    { path: ['maxAmountUsd'], message: 'The maximum must not be below the minimum' },
+  )
+  .refine(
+    (condition) =>
+      // A category that is both required and excluded can never match, so the rule
+      // would silently never apply. That is a mistake, not a valid configuration.
+      condition.includedCategoryIds.every(
+        (id) => !condition.excludedCategoryIds.includes(id),
+      ) &&
+      (condition.merchantCategoryId === null ||
+        !condition.excludedCategoryIds.includes(condition.merchantCategoryId)),
+    {
+      path: ['excludedCategoryIds'],
+      message: 'A category cannot be both required and excluded — the rule could never apply',
+    },
+  )
+  .refine(
+    (condition) =>
+      condition.includedMerchantIds.every((id) => !condition.excludedMerchantIds.includes(id)),
+    {
+      path: ['excludedMerchantIds'],
+      message: 'A merchant cannot be both required and excluded',
+    },
+  )
+  .refine(
+    (condition) => condition.includedMccs.every((mcc) => !condition.excludedMccs.includes(mcc)),
+    { path: ['excludedMccs'], message: 'A code cannot be both required and excluded' },
+  );
+
+export type RewardRuleConditionInput = z.infer<typeof rewardRuleConditionSchema>;
+export type RewardRuleConditionFormValues = z.input<typeof rewardRuleConditionSchema>;
+
+/**
+ * A source document behind a rate.
+ *
+ * WalletWise reads sources by hand; it never scrapes them. The URL is recorded so a
+ * reviewer can check the claim, not so a crawler can fetch it — see SECURITY.md.
+ */
+export const sourceSchema = z.object({
+  label: safeTextSchema(160, 'Label').pipe(z.string().min(4, 'Describe the source')),
+  url: z.string().trim().url('Enter a full https:// URL').nullable().default(null),
+  publisher: safeTextSchema(120, 'Publisher').optional(),
+  documentType: z
+    .enum([
+      'issuer_terms',
+      'issuer_marketing',
+      'network_documentation',
+      'user_submission',
+      'fictional_demo_data',
+      'other',
+    ])
+    .default('issuer_terms'),
+  publishedOn: z.coerce.date().nullable().default(null),
+  retrievedOn: z.coerce.date().nullable().default(null),
+  notes: safeTextSchema(500, 'Notes').optional(),
+  /** Demonstration data must be badged as such wherever it appears. */
+  isFictional: z.boolean().default(false),
+});
+
+export type SourceInput = z.infer<typeof sourceSchema>;
+export type SourceFormValues = z.input<typeof sourceSchema>;
+
 export const verificationSchema = z.object({
   rewardRuleId: uuidSchema,
   sourceId: uuidSchema.nullable().default(null),
@@ -367,3 +486,4 @@ export const verificationSchema = z.object({
 });
 
 export type VerificationInput = z.infer<typeof verificationSchema>;
+export type VerificationFormValues = z.input<typeof verificationSchema>;

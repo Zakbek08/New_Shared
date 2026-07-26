@@ -503,6 +503,71 @@ normalises both fields, matching what the real client always sends.
 
 ---
 
+## Phase 6 coverage — 7 further suites
+
+Total after Phase 6: **1,730 tests across 57 suites.** Counts are from `jest --json`.
+
+| Suite                                              | Tests | Covers                                                        |
+| -------------------------------------------------- | ----- | ------------------------------------------------------------- |
+| `src/features/admin/api/catalog.test.ts`           | 33    | **The three exit criteria** — create, verify, retire; refusal |
+| `src/domain/catalog/bulkImport.test.ts`            | 26    | Per-row validation, and that it writes nothing                |
+| `src/features/admin/ui/ConditionBuilder.test.tsx`  | 22    | MCC ranges, exclusions, and refused contradictions            |
+| `src/domain/catalog/staleness.test.ts`             | 22    | The 90-day boundary to the day, and review ordering           |
+| `app/admin/catalog.test.tsx`                       | 19    | The role gate, and that it says who really enforces           |
+| `src/features/admin/ui/VerificationPanel.test.tsx` | 16    | Source required, append-only history, no "stale" choice       |
+| `src/features/admin/ui/BulkImportPanel.test.tsx`   | 14    | Report before write, valid-only import, stale-report reset    |
+
+`schemas.test.ts` grew from 58 to 78 assertions, covering the new condition and source
+schemas — including the contradictions that make a rule unsatisfiable. `int4range.test.ts`
+grew from 13 to 20, adding the write direction and a round-trip property.
+
+### The three exit criteria, as tests
+
+**An editor can create, verify and retire a rule.** All three flows run against the fake
+client with the exact payload asserted:
+
+- _create_ — every column, dates as ISO strings, and `verification_status: 'unverified'`,
+  because saving is not verifying;
+- _verify_ — `verification_history` is written **first** (it is append-only and cannot be
+  rolled back, so the worst failure leaves an accurate record with the rule unchanged), then
+  the rule. `verified_by` is the signed-in user, which the RLS policy requires. Only a
+  `verified` outcome stamps `last_verified_at` — marking a rule disputed is not evidence
+  anyone checked it today;
+- _retire_ — `is_active = false` and status `retired`. A test asserts no `delete` was
+  issued.
+
+**A member is refused by the database, not merely by the UI.** Seven write paths — rule
+insert, rule update, retire, condition write, source insert, bulk import, verification — are
+each driven with **SQLSTATE 42501**, what Postgres returns when an RLS policy refuses. Each
+must surface as a `forbidden` DataError with a permission message, which is what happens
+whatever the client believed. `app/admin/catalog.test.tsx` then asserts the screen says the
+same thing in words, and that the editing tools are hidden _because they would not work_ —
+not as the protection.
+
+**Every write is audited.** The trigger has existed since Phase 1. Phase 6 exposes it and
+asserts the viewer states what the trail deliberately omits: column names, never values.
+
+### Staleness is asserted to the day
+
+```
+verified 75 days ago → fresh          (15 days left)
+verified 76 days ago → due for review (14 days left, the threshold)
+verified 90 days ago → due for review (the last good day; still `verified`)
+verified 91 days ago → OUT OF DATE    (effectiveStatus becomes `stale`, with no write)
+```
+
+Three statuses are deliberately _not_ aged: `disputed` and `retired` are stronger statements
+than "stale", and `user_reported` was never a verification against a source, so it has
+nothing to expire. Each has a test.
+
+### Two harness fixes
+
+`supabaseFake` was missing `ilike` from its chainable filter list, so a call using it threw
+`is not a function` inside a `try` and surfaced as an opaque "unknown" DataError. The list is
+now deliberately broader than today's call sites, and the reason is recorded beside it.
+
+---
+
 ## Integration and RLS testing (Phase 7)
 
 Structural RLS assertions catch a missing policy but not a wrong predicate. Phase 7 adds

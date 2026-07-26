@@ -38,6 +38,8 @@ export const ANALYTICS_EVENTS = [
   'rotating_category_activated',
   'catalog_rule_edited',
   'catalog_rule_verified',
+  'catalog_rules_imported',
+  'catalog_access_denied',
 ] as const;
 
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];

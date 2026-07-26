@@ -48,3 +48,26 @@ export function parseInt4Ranges(literals: readonly string[]): InclusiveRange[] {
     .map(parseInt4Range)
     .filter((range): range is InclusiveRange => range !== null);
 }
+
+/**
+ * Writes an inclusive `[from, to]` back as a Postgres range literal.
+ *
+ * Emitted in the canonical half-open form Postgres would store anyway, so a value
+ * written by the admin editor and read back by the engine round-trips exactly. Using
+ * `[from,to]` here would work — Postgres canonicalises it — but emitting the
+ * canonical form keeps the two directions of this module visibly symmetrical.
+ */
+export function formatInt4Range(range: InclusiveRange): string {
+  const [from, to] = range;
+  if (!Number.isInteger(from) || !Number.isInteger(to)) {
+    throw new RangeError('An MCC range must be whole numbers');
+  }
+  if (from > to) {
+    throw new RangeError('An MCC range must not start above it ends');
+  }
+  return `[${from},${to + 1})`;
+}
+
+export function formatInt4Ranges(ranges: readonly InclusiveRange[]): string[] {
+  return ranges.map(formatInt4Range);
+}

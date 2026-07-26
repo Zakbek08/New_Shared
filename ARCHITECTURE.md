@@ -48,11 +48,13 @@ authentication, card catalog and user wallet — are complete as of Phase 2; mod
 9 — the rewards engine, the ranking engine and the explanation layer — as of Phase 3; and
 modules 5 and 6 — the purchase-intent form and the merchant-category classifier — as of
 Phase 4, along with the results and details screens that render module 9's output; and
-modules 10 and 11 — user offers and the spending-cap tracker — as of Phase 5.
+modules 10 and 11 — user offers and the spending-cap tracker — as of Phase 5; and modules 12
+and 13 — the administrative rules interface and the source-verification trail — as of
+Phase 6.
 
-Module 12, the administrative rules interface, has its contracts defined, its tables and RLS
-policies in place, and its screen scaffolded with a named-phase placeholder rather than mock
-data.
+All fourteen modules are now implemented. What remains for Phase 7 is review and hardening
+rather than new surface: RLS integration tests against a live Postgres, data export and
+account deletion, and a full accessibility pass.
 
 One correction to the table above: module 6 is implemented as a **deterministic classifier
 plus a deterministic free-text parser** (`src/domain/purchaseText/`), not as a model call.

@@ -26,6 +26,13 @@ export const queryKeys = {
     // invalidates it along with the card list.
     snapshot: () => ['wallet', 'snapshot'] as const,
   },
+  admin: {
+    all: ['admin'] as const,
+    rules: (search: string) => ['admin', 'rules', search] as const,
+    sources: () => ['admin', 'sources'] as const,
+    verificationHistory: (ruleId: string) => ['admin', 'verification', ruleId] as const,
+    audit: (tableName: string) => ['admin', 'audit', tableName] as const,
+  },
   offers: {
     all: ['offers'] as const,
     list: () => ['offers', 'list'] as const,

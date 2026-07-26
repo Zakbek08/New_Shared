@@ -10,8 +10,10 @@ import {
   purchaseIntentSchema,
   registrationSchema,
   rewardPreferenceSchema,
+  rewardRuleConditionSchema,
   rewardRuleSchema,
   safeTextSchema,
+  sourceSchema,
   userOfferSchema,
 } from './schemas';
 
@@ -401,5 +403,191 @@ describe('rewardRuleSchema', () => {
       rewardRuleSchema.safeParse({ ...base, startsAt: '2026-10-01', endsAt: '2026-07-01' })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('rewardRuleConditionSchema', () => {
+  const RULE_ID = '66666666-0000-4000-8000-000000000102';
+  const GROCERY = '33333333-0000-4000-8000-000000000002';
+  const MERCHANT = '44444444-0000-4000-8000-000000000002';
+
+  const base = { rewardRuleId: RULE_ID };
+
+  it('accepts an empty condition, which means "no constraint"', () => {
+    // A card's base rule is exactly this. The builder warns; the schema allows.
+    const parsed = rewardRuleConditionSchema.safeParse(base);
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.channel).toBe('either');
+    expect(parsed.success && parsed.data.includedCategoryIds).toEqual([]);
+  });
+
+  it('accepts an inclusive MCC range', () => {
+    const parsed = rewardRuleConditionSchema.safeParse({
+      ...base,
+      includedMccRanges: [[5411, 5411]],
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.includedMccRanges).toEqual([[5411, 5411]]);
+  });
+
+  it('rejects a range whose first code is above the second', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({ ...base, includedMccRanges: [[5814, 5811]] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects an MCC outside 1-9999', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({ ...base, includedMccs: [10_000] }).success,
+    ).toBe(false);
+    expect(rewardRuleConditionSchema.safeParse({ ...base, includedMccs: [0] }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a category that is both required and excluded', () => {
+    // Such a rule can never apply: it would look configured and do nothing.
+    const parsed = rewardRuleConditionSchema.safeParse({
+      ...base,
+      includedCategoryIds: [GROCERY],
+      excludedCategoryIds: [GROCERY],
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(
+      !parsed.success &&
+        parsed.error.issues.some((issue) => /could never apply/.test(issue.message)),
+    ).toBe(true);
+  });
+
+  it('rejects the scalar category being excluded as well', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        merchantCategoryId: GROCERY,
+        excludedCategoryIds: [GROCERY],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a merchant that is both required and excluded', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        includedMerchantIds: [MERCHANT],
+        excludedMerchantIds: [MERCHANT],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a code that is both required and excluded', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        includedMccs: [5411],
+        excludedMccs: [5411],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a category excluded alongside a different included one', () => {
+    // The common real case: groceries in, warehouse clubs out.
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        includedCategoryIds: [GROCERY],
+        excludedCategoryIds: ['33333333-0000-4000-8000-000000000011'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a maximum amount below the minimum', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({ ...base, minAmountUsd: 500, maxAmountUsd: 25 })
+        .success,
+    ).toBe(false);
+  });
+
+  it('accepts equal minimum and maximum', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({ ...base, minAmountUsd: 25, maxAmountUsd: 25 })
+        .success,
+    ).toBe(true);
+  });
+
+  it('uppercases country and currency codes', () => {
+    const parsed = rewardRuleConditionSchema.safeParse({
+      ...base,
+      includedCountryCodes: ['us'],
+      includedCurrencyCodes: ['usd'],
+    });
+
+    expect(parsed.success && parsed.data.includedCountryCodes).toEqual(['US']);
+    expect(parsed.success && parsed.data.includedCurrencyCodes).toEqual(['USD']);
+  });
+
+  it('rejects an end date before the start date', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        startsAt: '2026-10-01',
+        endsAt: '2026-07-01',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects credential-like text in the notes', () => {
+    expect(
+      rewardRuleConditionSchema.safeParse({
+        ...base,
+        notes: 'Reported by 4111 1111 1111 1111',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('sourceSchema', () => {
+  const base = { label: 'Issuer terms page' };
+
+  it('accepts a source with an https URL', () => {
+    const parsed = sourceSchema.safeParse({
+      ...base,
+      url: 'https://example.test/terms',
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.documentType).toBe('issuer_terms');
+    expect(parsed.success && parsed.data.isFictional).toBe(false);
+  });
+
+  it('accepts a source with no URL, since not every document has one', () => {
+    expect(sourceSchema.safeParse({ ...base, url: null }).success).toBe(true);
+  });
+
+  it('rejects a label too short to identify anything', () => {
+    expect(sourceSchema.safeParse({ label: 'abc' }).success).toBe(false);
+  });
+
+  it('rejects a malformed URL', () => {
+    expect(sourceSchema.safeParse({ ...base, url: 'not a url' }).success).toBe(false);
+  });
+
+  it('records demonstration data as fictional when asked', () => {
+    const parsed = sourceSchema.safeParse({
+      ...base,
+      documentType: 'fictional_demo_data',
+      isFictional: true,
+    });
+
+    expect(parsed.success && parsed.data.isFictional).toBe(true);
+  });
+
+  it('rejects credential-like text in the notes', () => {
+    expect(sourceSchema.safeParse({ ...base, notes: 'CVV 123 on the back' }).success).toBe(
+      false,
+    );
   });
 });

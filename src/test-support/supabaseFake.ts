@@ -63,10 +63,19 @@ function buildClient(config: FakeConfig, sink: SupabaseFake) {
 
     const builder: Record<string, unknown> = {};
 
+    // Every chainable filter the app uses. A method missing from this list throws
+    // `is not a function` inside a `try`, which surfaces as an opaque "unknown"
+    // DataError — so the list is deliberately broader than today's call sites.
     for (const method of [
       'select',
       'eq',
       'neq',
+      'gt',
+      'gte',
+      'lt',
+      'lte',
+      'like',
+      'ilike',
       'or',
       'order',
       'limit',
@@ -74,6 +83,8 @@ function buildClient(config: FakeConfig, sink: SupabaseFake) {
       'in',
       'is',
       'not',
+      'contains',
+      'overlaps',
       'filter',
       'match',
     ]) {
