@@ -49,9 +49,10 @@ device before they are sent, so the server never sees them in plaintext.
 
 ## Status
 
-**Phase 2 complete.** You can register, sign in, and manage a wallet of real cards from
-the catalog — including creating your own. The deterministic rewards engine and the
-recommendation UI arrive in Phases 3-4.
+**Phase 3 complete.** The deterministic rewards engine is built and tested: it takes a
+wallet snapshot, a purchase and an instant, and returns a ranked answer with a full
+arithmetic breakdown. The purchase form and recommendation UI that sit on top of it arrive
+in Phase 4.
 
 | Phase | Scope                                             | Status         |
 | ----- | ------------------------------------------------- | -------------- |

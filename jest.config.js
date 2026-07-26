@@ -23,12 +23,31 @@ module.exports = {
     '!src/test-support/**',
     '!src/types/database.ts',
   ],
+  // Thresholds are a floor, not a target. The engine's are high because it is
+  // pure, total and has no excuse; the global figure is dragged down by UI
+  // scaffolding whose behaviour arrives in later phases.
+  //
+  // Note: a path-specific threshold *removes* those files from the global
+  // calculation, so the global numbers below describe everything outside
+  // `src/domain/`.
   coverageThreshold: {
+    './src/domain/rewards/': {
+      statements: 95,
+      branches: 92,
+      functions: 98,
+      lines: 95,
+    },
+    './src/domain/': {
+      statements: 95,
+      branches: 92,
+      functions: 95,
+      lines: 95,
+    },
     global: {
-      statements: 40,
-      branches: 30,
-      functions: 35,
-      lines: 40,
+      statements: 55,
+      branches: 55,
+      functions: 40,
+      lines: 55,
     },
   },
 };

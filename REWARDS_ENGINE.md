@@ -17,9 +17,22 @@ meaningful.
 Contracts: `src/domain/rewards/types.ts`. Implementation (Phase 3): `evaluate.ts`,
 `rank.ts`, `explain.ts`.
 
-**Status:** Phase 1 ships the contracts plus two implemented, tested modules — `money.ts`
-(arithmetic) and `capWindow.ts` (cap-period resolution). The evaluation and ranking
-functions land in Phase 3.
+**Status: implemented and tested as of Phase 3.**
+
+| Module                     | Role                                                    |
+| -------------------------- | ------------------------------------------------------- |
+| `evaluate.ts`              | Orchestration and the eligibility decision              |
+| `conditions.ts`            | Condition matching — AND across rows, OR within arrays  |
+| `caps.ts`                  | Remaining-cap resolution against `reward_usage`         |
+| `stacking.ts`              | Rule contributions, stack groups, `isStackable`         |
+| `valuation.ts`             | Program → unit → zero resolution                        |
+| `offers.ts`                | Merchant-offer matching and valuation                   |
+| `confidence.ts`            | Weakest-link confidence and its warnings                |
+| `rank.ts`                  | Ranking, the five-level tie-break, the switch threshold |
+| `explain.ts`               | Deterministic explanation assembly                      |
+| `money.ts`, `capWindow.ts` | Arithmetic and cap windows (Phase 1)                    |
+
+Import from `src/domain/rewards` rather than reaching into a module directly.
 
 ---
 
@@ -109,6 +122,13 @@ Then `splitAtCap(amount, remaining)` divides the purchase:
 - **Over the cap** → `post_cap_rate`, or the card's base rule when `post_cap_rate` is `NULL`
 - **Cap exhausted** and no fallback → `cap_exhausted`
 
+**Fall-through needs no special case.** The cap split is applied _before_ a stack group picks
+its winner, and the winner is chosen by resulting value rather than by priority. So an
+exhausted 6% rule with no `post_cap_rate` scores zero and the card's own 1% base rule wins the
+group on merit. The specified behaviour falls out of the ranking rather than being coded
+separately — which is why `evaluate.ts` keeps a cap-exhausted rule in the qualifying set
+instead of discarding it.
+
 A partially-remaining cap produces a blended figure and a `cap_partially_available`
 warning. `cap_nearly_reached` fires when little is left.
 
@@ -124,6 +144,12 @@ Rules with `is_stackable = true` are then added on top.
 
 Card 8 in the seed data shows both: a 5% online rule in group `category`, plus a 2% intro
 bonus in group `intro` marked stackable → 7% on a qualifying online purchase.
+
+**Mixed units.** A card could in principle stack a cash-back rule with a points rule.
+`rewardValueUsd` sums every contribution correctly in dollars, but `grossRewardUnits` and
+`effectiveRate` can only describe one unit, so they report the primary contribution's — the
+headline stays truthful and the dollar figure stays complete. No card in the catalog does
+this today; the behaviour is pinned by `stacking.test.ts` regardless.
 
 | Reward type         | Arithmetic                                  |
 | ------------------- | ------------------------------------------- |
@@ -330,5 +356,7 @@ explanation never becomes the weakest link in a financial figure.
 Every step above has a corresponding entry in the [TESTING.md](TESTING.md) matrix. Phase 3
 lands the full matrix before the recommendation UI is built on top of the engine.
 
-Phase 1 has 393 tests covering arithmetic, cap windows, the taxonomy, validation,
-redaction, contrast and schema invariants.
+The matrix is complete as of Phase 3: **460 engine and purity tests**, with the engine at
+99.0% statements and 95.7% branches. `src/domain/purity.test.ts` enforces the determinism
+guarantee by reading every domain module as source text, so a stray `Date.now()` or `fetch`
+fails the build even on an unexercised path.

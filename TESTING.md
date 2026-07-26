@@ -172,10 +172,70 @@ Total after Phase 2: **539 tests across 17 suites.**
 
 ---
 
-## Phase 3 engine matrix — required before the recommendation UI
+## Phase 3 coverage — 9 further suites
 
-Every row is required by the specification. Each needs at least one test with a hand-checked
-expected value.
+Total after Phase 3: **999 tests across 26 suites.** The matrix below is complete and
+passing; counts are from `jest --json`, not estimated.
+
+| Suite                                   | Tests | Covers                                                       |
+| --------------------------------------- | ----- | ------------------------------------------------------------ |
+| `src/domain/purity.test.ts`             | 195   | The determinism guarantee, enforced over every domain module |
+| `src/domain/rewards/evaluate.test.ts`   | 92    | The full 14-category engine matrix, end to end               |
+| `src/domain/rewards/conditions.test.ts` | 38    | AND/OR semantics, exclusions, windows, every rejection code  |
+| `src/domain/rewards/confidence.test.ts` | 27    | Weakest-link confidence and its warnings                     |
+| `src/domain/rewards/stacking.test.ts`   | 25    | Spend thresholds, mixed units, offer matching                |
+| `src/domain/rewards/rank.test.ts`       | 24    | The five-level tie-break and the switch threshold            |
+| `src/domain/rewards/explain.test.ts`    | 22    | Wording, and that no invented figure can appear              |
+| `src/domain/rewards/caps.test.ts`       | 20    | Cap windows, consumption, resets, utilisation                |
+| `src/domain/rewards/valuation.test.ts`  | 17    | Program → unit → zero resolution                             |
+
+**Engine coverage: 99.0% statements, 95.7% branches, 100% functions.** `jest.config.js`
+enforces 95/92 on `src/domain/rewards/` and on `src/domain/` as a whole.
+
+### Purity is enforced, not asserted
+
+`purity.test.ts` reads every module under `src/domain/` as _source text_ — so a violation is
+caught even on a path no test happens to execute — and fails on:
+
+`Date.now()` · a no-argument `new Date()` · `performance.now()` · `Math.random()` · any
+crypto random source · `fetch` · a Supabase import · a React import · `process.env` ·
+filesystem access · any `console` call · an import from `features/`, `components/`,
+`providers/`, `services/` or `config/`
+
+Plus two behavioural checks: identical inputs give byte-identical output, and a seasonal rule
+is active or expired purely as a function of `asOf`.
+
+### What the engine tests actually pin
+
+- **The specification's own example** works end to end: $120 of groceries returns the 6% card
+  at **$7.20** with the runner-up at **$6.00** and an advantage of **$1.20**.
+- **Cap fall-through needs no special case.** Because a `stackGroup` winner is chosen by
+  resulting _value_, an exhausted 6% rule with no `postCapRate` scores zero and the card's
+  own 1% base rule wins on merit. Tested both ways round.
+- **A valuation of zero is honoured**, not replaced by a default — the single most important
+  behaviour in `valuation.ts`.
+- **A fee-wiped card stays eligible.** 3x miles at 1¢ less a 3% fee nets $0.00 and *loses* to
+  a 2% no-fee card at $2.00, rather than disappearing from the list.
+- **Ranking is total.** Every comparison path ends on the card name, so two identical cards
+  still order stably. Asserted by evaluating the same wallet forwards and reversed.
+- **The explanation can invent nothing.** One test extracts every dollar figure from the
+  generated sentence and asserts each one appears in the breakdown.
+
+### One bug this matrix caught
+
+`rank.ts` computed the runner-up advantage with raw subtraction: `7.2 - 6` is
+`1.2000000000000002` in IEEE-754. That figure is persisted to
+`recommendations.advantage_over_runner_up_usd`, so it was a real defect rather than a display
+quirk — exactly the class of error `money.ts` exists to prevent, in the one place that had
+bypassed it. Both the advantage and the switch-threshold comparison now round through
+`roundUsd`.
+
+---
+
+## Phase 3 engine matrix — complete
+
+Every row is required by the specification, and every row now has at least one test with a
+hand-checked expected value. Retained as the checklist for future changes to the engine.
 
 ### Percentage cash back
 
@@ -335,12 +395,20 @@ compares them.
 
 ## Coverage
 
-Thresholds in `jest.config.js` are a floor, not a target: statements 40%, branches 30%,
-functions 35%, lines 40%. They are set low in Phase 1 because most of `src/` is UI scaffold
-awaiting later phases.
+Thresholds in `jest.config.js` are a floor, not a target:
 
-**Phase 3 must raise them.** `src/domain/rewards/` should reach 95%+ statements and branches
-— it is pure, total, and has no excuse. `src/domain/` overall should reach 90%.
+| Scope                 | Statements | Branches | Functions | Lines |
+| --------------------- | ---------- | -------- | --------- | ----- |
+| `src/domain/rewards/` | 95         | 92       | 98        | 95    |
+| `src/domain/`         | 95         | 92       | 95        | 95    |
+| Everything else       | 55         | 55       | 40        | 55    |
+
+The engine's are high because it is pure, total and has no excuse. The global figure is
+dragged down by UI scaffolding whose behaviour arrives in Phases 4-6, and should rise with
+each phase.
+
+Note that a path-specific threshold _removes_ those files from the global calculation, so
+the global row describes everything outside `src/domain/`.
 
 Coverage is a smoke detector, not a goal. 100% coverage of code that asserts nothing about
 correctness is worth less than one test that checks $7.20.

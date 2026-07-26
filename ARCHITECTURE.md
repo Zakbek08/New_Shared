@@ -44,7 +44,8 @@ The fourteen modules from the specification, and where each lives.
 | 14  | Analytics and error monitoring abstraction | `src/services/`                                               | 1     |
 
 Modules 1, 7, 11, 13 and 14 have their Phase 1 foundations in place. Modules 2, 3 and 4 —
-authentication, card catalog and user wallet — are complete as of Phase 2. The rest have their
+authentication, card catalog and user wallet — are complete as of Phase 2, and modules 7,
+8 and 9 — the rewards engine, the ranking engine and the explanation layer — as of Phase 3. The rest have their
 contracts defined and their screens scaffolded.
 
 ---

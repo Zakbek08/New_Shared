@@ -71,7 +71,7 @@ cannot read User B's wallet needs a live database, and is scheduled for Phase 7.
 
 ---
 
-## Phase 3 — Deterministic rewards engine
+## Phase 3 — Deterministic rewards engine ✅ Complete
 
 The heart of the product. Built before any UI depends on it.
 
@@ -84,12 +84,21 @@ The heart of the product. Built before any UI depends on it.
 - `explain.ts` — deterministic explanation assembly
 - `confidence.ts` — the weakest-link confidence calculation
 
-**Exit criteria:** the **entire** Phase 3 matrix in [TESTING.md](TESTING.md) passes — all 14
-categories, ~120 cases. `src/domain/rewards/` at 95%+ statement and branch coverage.
-Coverage thresholds raised in `jest.config.js`. Engine confirmed pure: no clock, no I/O, no
-randomness.
+**Exit criteria — met.** The full matrix passes. `src/domain/rewards/` is at **99.0%
+statements and 95.7% branches**; `jest.config.js` now enforces 95/92 there and 95/92 across
+`src/domain/`, up from the Phase 1 placeholder of 40/30.
 
-**Not before this exit criteria is met:** Phase 4.
+Purity is enforced rather than asserted. `src/domain/purity.test.ts` reads every domain
+module as source text and fails on `Date.now()`, a no-argument `new Date()`,
+`Math.random()`, `fetch`, a Supabase import, a React import, `process.env`, filesystem
+access or a `console` call — plus two behavioural checks that the engine is reproducible and
+depends on `asOf` rather than the wall clock.
+
+**One design note worth recording.** Cap fall-through needed no special case. Because the
+winner within a `stackGroup` is chosen by _resulting value_ rather than by priority, an
+exhausted 6% rule with no `postCapRate` simply scores zero and the card's own 1% base rule
+wins the group on merit. The spec's "fall through to the base rule" behaviour falls out of
+the ranking.
 
 ---
 
