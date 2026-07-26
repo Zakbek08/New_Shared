@@ -33,6 +33,10 @@ supabase/.env
 # Testing
 coverage/
 
+# Git bundles produced when handing work off. A bundle of this repository does
+# not belong inside it.
+*.bundle
+
 # Editors / OS
 .DS_Store
 Thumbs.db
