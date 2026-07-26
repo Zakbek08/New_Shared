@@ -2,9 +2,10 @@
  * Screen 11 — Card Details.
  *
  * Everything WalletWise knows about one card in the wallet, plus the settings the
- * user can change. Cap progress, enrollment and provenance arrive in Phases 5-6.
+ * user can change. Cap progress and activation are live as of Phase 5; the source
+ * and verification history arrive in Phase 6.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DisclaimerNotice } from '@/components/Disclaimers';
@@ -19,6 +20,8 @@ import { Text } from '@/components/ui/Text';
 import { TextField } from '@/components/ui/TextField';
 import { Toggle } from '@/components/ui/Toggle';
 import { VERIFICATION_STATUS_LABELS } from '@/domain/enums';
+import { CapTracker } from '@/features/caps/ui/CapTracker';
+import { RotatingCategoriesSection } from '@/features/caps/ui/RotatingCategories';
 import {
   useArchiveUserCard,
   useCardProduct,
@@ -37,6 +40,9 @@ import { decryptLastFour, MASKED_LAST_FOUR } from '@/lib/lastFour';
 export default function CardDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+
+  // The clock is read here, at the screen's edge, and handed to the cap tracker.
+  const asOf = useMemo(() => new Date(), []);
 
   const card = useWalletCard(id);
   const product = useCardProduct(card.data?.cardProductId);
@@ -237,17 +243,11 @@ export default function CardDetailsScreen() {
           </VStack>
         </Card>
 
-        <PlaceholderSection
-          phase="Phase 5"
-          title="Cap progress"
-          description="How much of each capped bonus you have used in the current window, and when it resets."
-          testID="card-details-caps"
-        />
+        <CapTracker asOf={asOf} userCardId={wallet.id} testID="card-details-caps" />
 
-        <PlaceholderSection
-          phase="Phase 5"
-          title="Activation"
-          description="Rules that need activating, with a link to the issuer's enrollment page. You tell WalletWise when you have activated; we never sign in on your behalf."
+        <RotatingCategoriesSection
+          asOf={asOf}
+          userCardId={wallet.id}
           testID="card-details-enrollment"
         />
 

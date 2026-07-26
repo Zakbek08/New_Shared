@@ -439,6 +439,70 @@ Two assertions exist purely to catch a fabricated number:
 
 ---
 
+## Phase 5 coverage — 11 further suites
+
+Total after Phase 5: **1,527 tests across 50 suites.** Counts are from `jest --json`.
+
+| Suite                                               | Tests | Covers                                                      |
+| --------------------------------------------------- | ----- | ----------------------------------------------------------- |
+| `src/domain/rewards/reminders.test.ts`              | 30    | Rotating periods and expiring offers, at every window edge  |
+| `src/domain/rewards/capProgress.test.ts`            | 22    | Cap arithmetic, resets, and the alert thresholds exactly    |
+| `src/domain/rewards/usage.test.ts`                  | 22    | What a confirmed purchase does to a cap, and the round trip |
+| `src/features/preferences/api/preferences.test.ts`  | 20    | Valuation precedence, and that a zero survives              |
+| `src/features/offers/offerImpact.test.ts`           | 18    | **Offers affect recommendations** — and when they must not  |
+| `src/features/caps/ui/CapTracker.test.tsx`          | 18    | Progress rows, thresholds in words, accessible values       |
+| `src/features/offers/ui/OfferRow.test.tsx`          | 17    | Offer rows and the expiring-offer alert                     |
+| `src/features/caps/api/usage.test.ts`               | 16    | Read-then-write merging, upsert targets, enrollment         |
+| `src/features/preferences/valuationRanking.test.ts` | 15    | **Changing a valuation changes the ranking**                |
+| `src/features/offers/api/offers.test.ts`            | 15    | Offer writes, and `enrolled_at` as the engine's own signal  |
+| `src/features/caps/ui/RotatingCategories.test.tsx`  | 14    | Activation copy, and that it never claims to activate       |
+
+### The three exit criteria, as tests
+
+**Changing a valuation changes the ranking.** `valuationRanking.test.ts` runs the real path —
+preference rows → `buildValuation` → `evaluateWallet` — with nothing stubbed in between. On a
+$100 restaurant purchase:
+
+```
+4x points on $100 = 400 points        3% cash back on $100 = $3.00
+  at 1.5¢  → $6.00   points win         break-even is 0.75¢
+  at 0.76¢ → $3.04   points win         at 0.74¢ → $2.96, cash wins
+  at 0.75¢ → $3.00   exact tie, cash wins on the tie-break
+  at 0¢    → $0.00   still listed, worth nothing
+```
+
+**Cap alerts fire at the right thresholds.** `capProgress.test.ts` pins each boundary against
+a $6,000 cap: $4,799 → `ample`, $4,800 (exactly 80%) → `nearly_reached`, $5,994 → still
+`nearly_reached`, $6,000 → `exhausted`, and $6,600 → `exhausted` rather than "nearly", because
+reporting a 110%-used cap as nearly reached would be actively misleading.
+
+**Offers affect recommendations.** `offerImpact.test.ts` gives a 1% card a $10 credit and
+watches it beat a 4% card by $8.20 — then pins the six ways an offer must fail to apply: not
+activated, minimum spend unmet, wrong merchant, expired, not yet started, wrong channel. Each
+has a positive mirror, so a bug that ignores _every_ offer cannot pass by accident.
+
+### Two defects these suites caught
+
+1. **An unactivated offer was counted as money.** `bestOffer` returned the value of an offer
+   the user had not activated, so a $60 purchase was reported as worth $10.60 when it would
+   actually earn $0.60. The same wallet's unactivated _rotating rule_ was correctly screened
+   out, so the two paths disagreed. `bestOffer` now returns `{ applied, awaitingActivation }`
+   and only `applied` carries value.
+2. **The catalog overruled the user.** `buildValuation` folded catalog program defaults into
+   `byProgramId` before reading the user's rows, and `resolveCentsPerUnit` checks
+   `byProgramId` before `byUnit` — so "all my points are worth 0.4¢" was silently replaced by
+   the catalog's 1¢. Caught by a test that asserted a per-unit default should change the
+   winner and found it did not.
+
+### A footgun closed in the test harness
+
+`supabaseFake` returned a queued result verbatim, so a test that wrote `{ data: [row] }`
+without `error: null` produced `error: undefined` — and every production check is
+`error !== null`, so the call threw. Three suites' worth of confusing failures. The fake now
+normalises both fields, matching what the real client always sends.
+
+---
+
 ## Integration and RLS testing (Phase 7)
 
 Structural RLS assertions catch a missing policy but not a wrong predicate. Phase 7 adds

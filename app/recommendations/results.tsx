@@ -123,7 +123,16 @@ export default function RecommendationResultsScreen() {
             <HStack gap="md" wrap>
               <Button
                 label="I used this card"
-                onPress={() => accept.mutate(recommendationId)}
+                // The winning candidate is passed so the cap it consumed can be
+                // recorded. Without it the accept is noted but no cap moves, and the
+                // next comparison would re-offer a bonus this purchase used up.
+                onPress={() =>
+                  accept.mutate({
+                    recommendationId,
+                    candidate: result.recommended,
+                    asOf: new Date(),
+                  })
+                }
                 loading={accept.isPending}
                 disabled={accept.isSuccess}
                 accessibilityHint="Records that you followed this recommendation, which helps track your cap progress"

@@ -74,19 +74,54 @@ function nominalValueUsd(
   return valueRewardUsd(units, offer.rewardUnit, null, valuation).valueUsd;
 }
 
+/** Best-first over `valueUsd`, with a deterministic tie-break on offer id. */
+function better(candidate: OfferOutcome, incumbent: OfferOutcome | null): boolean {
+  if (incumbent === null) return true;
+  if (candidate.valueUsd !== incumbent.valueUsd) {
+    return candidate.valueUsd > incumbent.valueUsd;
+  }
+  // Never depend on array order.
+  return candidate.offer.id < incumbent.offer.id;
+}
+
+export interface OfferSelection {
+  /**
+   * The offer whose value counts towards the recommendation.
+   *
+   * Only ever an offer the user has confirmed is activated.
+   */
+  readonly applied: OfferOutcome | null;
+  /**
+   * An offer that would have applied but has not been activated.
+   *
+   * Its value is deliberately **not** counted. Reported separately so the UI can
+   * say "activate this and the answer changes", which is actionable, instead of
+   * quietly promising money the user will not receive.
+   */
+  readonly awaitingActivation: OfferOutcome | null;
+}
+
 /**
- * The best applicable offer, or `null`.
+ * The best applicable offer, split by whether it can actually be claimed.
  *
  * One offer at a time: real issuers do not stack two targeted offers on a single
  * transaction, and assuming otherwise would overstate the reward.
+ *
+ * WHY ACTIVATION GATES THE VALUE
+ * A targeted offer pays nothing until the cardholder activates it in the issuer's
+ * app. Counting an unactivated offer would tell someone a $60 purchase is worth
+ * $10.60 when it will actually earn $0.60 — the exact defect CLAUDE.md exists to
+ * prevent, and the same reason an unactivated rotating-category *rule* is screened
+ * out rather than valued. The two paths now behave alike.
  */
 export function bestOffer(
   offers: readonly EvaluableOffer[],
   intent: PurchaseIntent,
   valuation: RewardValuation,
   asOf: Date,
-): OfferOutcome | null {
-  let best: OfferOutcome | null = null;
+): OfferSelection {
+  let applied: OfferOutcome | null = null;
+  let awaitingActivation: OfferOutcome | null = null;
 
   for (const offer of offers) {
     if (!offerApplies(offer, intent, asOf)) continue;
@@ -102,15 +137,12 @@ export function bestOffer(
       wasBenefitCapped: capped < nominal,
     };
 
-    if (best === null || outcome.valueUsd > best.valueUsd) {
-      best = outcome;
-      continue;
-    }
-    // Deterministic tie-break, so the result never depends on array order.
-    if (outcome.valueUsd === best.valueUsd && outcome.offer.id < best.offer.id) {
-      best = outcome;
+    if (outcome.requiresActivation) {
+      if (better(outcome, awaitingActivation)) awaitingActivation = outcome;
+    } else if (better(outcome, applied)) {
+      applied = outcome;
     }
   }
 
-  return best;
+  return { applied, awaitingActivation };
 }

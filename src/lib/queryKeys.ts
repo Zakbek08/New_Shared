@@ -26,6 +26,19 @@ export const queryKeys = {
     // invalidates it along with the card list.
     snapshot: () => ['wallet', 'snapshot'] as const,
   },
+  offers: {
+    all: ['offers'] as const,
+    list: () => ['offers', 'list'] as const,
+  },
+  preferences: {
+    all: ['preferences'] as const,
+    rewards: () => ['preferences', 'rewards'] as const,
+    valuations: () => ['preferences', 'valuations'] as const,
+  },
+  caps: {
+    all: ['caps'] as const,
+    progress: () => ['caps', 'progress'] as const,
+  },
   recommendations: {
     all: ['recommendations'] as const,
     recent: (limit: number) => ['recommendations', 'recent', limit] as const,

@@ -22,11 +22,15 @@ import { getCategoryBySlug } from '@/domain/categories';
 import type { PurchaseIntentInput } from '@/domain/schemas';
 import {
   evaluateWallet,
+  usageDeltaFor,
   type PurchaseIntent,
+  type RecommendationCandidate,
   type RecommendationResult,
 } from '@/domain/rewards';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { recordRewardUsage } from '@/features/caps/api/usage';
 import { queryKeys } from '@/lib/queryKeys';
+import { captureException } from '@/services/analytics';
 
 import {
   listMerchantsForClassification,
@@ -193,11 +197,58 @@ export function useMerchantSuggestions(search: string, countryCode: string) {
   });
 }
 
+/**
+ * "I used this card" — the one signal WalletWise gets about real spending.
+ *
+ * Two writes, in this order:
+ *   1. mark the recommendation accepted;
+ *   2. add what the purchase consumed to `reward_usage`, so the next comparison
+ *      knows the cap moved.
+ *
+ * The second is the whole reason cap tracking works: WalletWise sees no transaction
+ * feed, so a cap only ever advances because the user confirmed a purchase.
+ *
+ * The usage write is deliberately **not** allowed to fail the mutation. Being told
+ * "we could not record that" after the answer was already useful is worse than a
+ * slightly stale cap, and the failure direction is safe — a missed increment makes
+ * the cap look emptier, so WalletWise under-claims rather than over-claims. The
+ * error is still reported to monitoring.
+ */
 export function useAcceptRecommendation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => markRecommendationAccepted(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.recommendations.all }),
+    mutationFn: async (variables: {
+      readonly recommendationId: string;
+      /** The winning candidate, when the caller still has the live result. */
+      readonly candidate?: RecommendationCandidate | null;
+      readonly asOf?: Date;
+    }) => {
+      await markRecommendationAccepted(variables.recommendationId);
+
+      const candidate = variables.candidate ?? null;
+      if (candidate === null) return { recordedUsage: false };
+
+      const delta = usageDeltaFor({
+        candidate,
+        asOf: variables.asOf ?? new Date(),
+      });
+      if (delta === null) return { recordedUsage: false };
+
+      try {
+        await recordRewardUsage(delta);
+        return { recordedUsage: true };
+      } catch (cause) {
+        captureException(cause, { stage: 'record_reward_usage' });
+        return { recordedUsage: false };
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.recommendations.all });
+      // Cap usage lives inside the wallet snapshot, so the next evaluation has to
+      // reload it or it will re-offer a bonus this purchase just consumed.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wallet.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caps.all });
+    },
   });
 }

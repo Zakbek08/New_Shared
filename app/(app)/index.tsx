@@ -6,21 +6,24 @@
  * merchants, current rotating categories, spending-cap alerts and expiring
  * offers.
  *
- * Phase 1 builds the real structure and the real primary action; each data
- * region says which phase fills it. Nothing on this screen shows a fabricated
- * reward figure.
+ * Nothing on this screen shows a fabricated reward figure: every number comes from
+ * the deterministic engine run against the user's own wallet. The three alert
+ * regions render nothing at all when there is nothing to warn about, so a section
+ * appearing is itself the signal.
  */
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 
 import { DemoDataBanner, DisclaimerNotice } from '@/components/Disclaimers';
-import { PlaceholderSection } from '@/components/PlaceholderSection';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
 import { isDemoDataEnabled } from '@/config/env';
+import { CapAlertsSection } from '@/features/caps/ui/CapTracker';
+import { ActivationRemindersSection } from '@/features/caps/ui/RotatingCategories';
+import { ExpiringOffersSection } from '@/features/offers/ui/ExpiringOffers';
 import { RecentRecommendations } from '@/features/recommendations/ui/RecentRecommendations';
 import { TopCardsByCategory } from '@/features/recommendations/ui/TopCardsByCategory';
 
@@ -88,26 +91,16 @@ export default function HomeScreen() {
           testID="home-recent-merchants"
         />
 
-        <PlaceholderSection
-          phase="Phase 5"
-          title="Current rotating categories"
-          description="This quarter's activated categories for any rotating-category card in your wallet, with an activation reminder when one is not enrolled."
-          testID="home-rotating"
-        />
+        {/*
+          Three alert regions, each of which renders nothing when there is nothing to
+          say. A dashboard that announces "no alerts" three times buries the one
+          section that matters on the day it appears.
+        */}
+        <ActivationRemindersSection asOf={asOf} testID="home-rotating" />
 
-        <PlaceholderSection
-          phase="Phase 5"
-          title="Spending-cap alerts"
-          description="Which capped bonuses you are close to exhausting, and when each cap resets."
-          testID="home-cap-alerts"
-        />
+        <CapAlertsSection asOf={asOf} testID="home-cap-alerts" />
 
-        <PlaceholderSection
-          phase="Phase 5"
-          title="Expiring offers"
-          description="Targeted offers you have entered that are about to run out."
-          testID="home-expiring-offers"
-        />
+        <ExpiringOffersSection asOf={asOf} testID="home-expiring-offers" />
 
         <DisclaimerNotice kind="financial" />
       </VStack>

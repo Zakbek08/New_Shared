@@ -181,7 +181,15 @@ function evaluateCard(
   const stacked = stackContributions(contributions);
 
   // --- Step 7: offers ------------------------------------------------------
-  const offer = bestOffer(card.offers, intent, context.valuation, context.asOf);
+  // `applied` is the offer whose value counts; `awaitingActivation` is one the user
+  // could claim but has not activated, which is reported as a warning and valued at
+  // nothing. See `bestOffer` for why activation gates the money.
+  const { applied: offer, awaitingActivation } = bestOffer(
+    card.offers,
+    intent,
+    context.valuation,
+    context.asOf,
+  );
 
   // --- Step 8: foreign transaction fee -------------------------------------
   const feeUsd = foreignTransactionFee(intent.amountUsd, card.foreignTransactionFeePercent, {
@@ -229,7 +237,7 @@ function evaluateCard(
         primaryRule?.rewardProgramId ?? null,
         context.valuation,
       ),
-    offerRequiresActivation: offer?.requiresActivation ?? false,
+    offerRequiresActivation: awaitingActivation !== null,
   });
 
   const breakdown: RewardBreakdown = {

@@ -214,22 +214,34 @@ function toCard(row: SnapshotRow): EvaluableCard {
 /**
  * Builds the user's reward valuation.
  *
- * Program defaults from the catalog are folded into `byProgramId` *first*, so a
- * user preference for the same program overwrites them. That ordering is what
- * makes `resolveCentsPerUnit` able to honour an explicit valuation of zero: by
- * the time it looks, a user's `0` has replaced the catalog default rather than
- * sitting behind it.
+ * `RewardValuation` has two slots and `resolveCentsPerUnit` reads them in a fixed
+ * order — `byProgramId`, then `byUnit` — so the four-level precedence the product
+ * needs has to be flattened into them here:
+ *
+ *   1. the user's figure for this specific program   → `byProgramId`
+ *   2. the user's default for this unit type         → `byUnit`
+ *   3. the catalog's figure for this program         → `byProgramId`, only when
+ *                                                      neither 1 nor 2 was given
+ *   4. `1` per unit as a last resort                → `byUnit`
+ *
+ * The user's rows are therefore read **first**, and a catalog default is folded in
+ * only where the user has said nothing that covers it. Doing it the other way round
+ * — catalog first, user second — looks equivalent but is not: the catalog's
+ * program-level figure would sit in `byProgramId` and silently outrank the user's own
+ * per-unit default, overruling them on the figure that decides which card wins.
+ *
+ * A user figure of `0` is kept as `0` throughout: it means "worthless to me", not
+ * "unset".
  */
 export function buildValuation(
   preferences: readonly UserRewardPreferenceRow[],
   programDefaults: ReadonlyMap<string, { unit: RewardUnit; centsPerUnit: number }>,
 ): RewardValuation {
   const byProgramId: Record<string, number> = {};
-  for (const [programId, program] of programDefaults) {
-    byProgramId[programId] = program.centsPerUnit;
-  }
-
   const byUnit: Record<RewardUnit, number> = { usd: 1, points: 1, miles: 1 };
+
+  /** Units the user gave an explicit default for, which outranks a catalog figure. */
+  const unitsSetByUser = new Set<RewardUnit>();
 
   let prefersCashBackOnly = false;
   let minimumSwitchBenefitUsd = 0;
@@ -238,6 +250,7 @@ export function buildValuation(
     if (preference.reward_program_id === null) {
       // A null program means "my default for this unit type".
       byUnit[preference.unit] = preference.cents_per_unit;
+      unitsSetByUser.add(preference.unit);
     } else {
       byProgramId[preference.reward_program_id] = preference.cents_per_unit;
     }
@@ -248,6 +261,12 @@ export function buildValuation(
       minimumSwitchBenefitUsd,
       preference.minimum_switch_benefit_usd,
     );
+  }
+
+  for (const [programId, program] of programDefaults) {
+    if (byProgramId[programId] !== undefined) continue;
+    if (unitsSetByUser.has(program.unit)) continue;
+    byProgramId[programId] = program.centsPerUnit;
   }
 
   return { byProgramId, byUnit, prefersCashBackOnly, minimumSwitchBenefitUsd };

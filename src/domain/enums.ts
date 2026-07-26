@@ -174,6 +174,20 @@ export const PURCHASE_CHANNEL_LABELS: Record<PurchaseChannel, string> = {
   either: 'Either',
 };
 
+/**
+ * Reward types in the user's words.
+ *
+ * Phrased as what the user would read on the offer they are copying across, not as
+ * the enum member: nobody sees "points_per_dollar" on a bank's website.
+ */
+export const REWARD_TYPE_LABELS: Record<RewardType, string> = {
+  cash_back_percent: 'Percent cash back',
+  points_per_dollar: 'Points per dollar',
+  miles_per_dollar: 'Miles per dollar',
+  statement_credit: 'Statement credit',
+  fixed_amount: 'Fixed amount back',
+};
+
 export const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
   high: 'High confidence',
   medium: 'Medium confidence',

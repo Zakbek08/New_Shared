@@ -878,10 +878,24 @@ describe('merchant offers', () => {
     expect(result.recommended?.breakdown.offerValueUsd).toBe(0);
   });
 
-  it('warns when the offer still needs activating', () => {
+  it('does not count an unactivated offer, but warns that it exists', () => {
+    // A targeted offer pays nothing until the cardholder activates it. Counting the
+    // $12 here would tell someone a $120 purchase is worth $12 more than it is —
+    // which is why the value is withheld and the warning is raised instead. The same
+    // rule applies to an unactivated rotating-category bonus.
     const result = evaluate([withOffer({ rate: 10, isEnrolled: false })]);
-    expect(result.recommended?.breakdown.offerValueUsd).toBe(12);
+
+    expect(result.recommended?.breakdown.offerValueUsd).toBe(0);
+    expect(result.recommended?.breakdown.appliedOfferId).toBeNull();
     expect(result.recommended?.warnings).toContain('offer_requires_activation');
+  });
+
+  it('counts the offer once it is activated', () => {
+    // The mirror of the case above: 120 × 10% = $12.00, on top of the card's own 2%.
+    const result = evaluate([withOffer({ rate: 10, isEnrolled: true })]);
+
+    expect(result.recommended?.breakdown.offerValueUsd).toBe(12);
+    expect(result.recommended?.warnings).not.toContain('offer_requires_activation');
   });
 
   it('applies only the best offer, not both', () => {

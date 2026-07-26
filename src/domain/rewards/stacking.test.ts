@@ -226,8 +226,49 @@ describe('offerApplies', () => {
 });
 
 describe('bestOffer', () => {
-  it('returns null when nothing applies', () => {
-    expect(bestOffer([], intent(), valuation(), context().asOf)).toBeNull();
+  it('returns nothing on either side when no offer applies', () => {
+    expect(bestOffer([], intent(), valuation(), context().asOf)).toEqual({
+      applied: null,
+      awaitingActivation: null,
+    });
+  });
+
+  it('does not count an offer the user has not activated', () => {
+    // A targeted offer pays nothing until it is activated with the issuer. Counting
+    // it would promise money the purchase will not earn.
+    const result = bestOffer(
+      [offer({ merchantId: MERCHANT.greenleafMarket, rate: 10, isEnrolled: false })],
+      intent(),
+      valuation(),
+      context().asOf,
+    );
+
+    expect(result.applied).toBeNull();
+    // Still surfaced, with what it would be worth, so the UI can prompt for it:
+    // 120 × 10% = $12.00.
+    expect(result.awaitingActivation?.valueUsd).toBe(12);
+    expect(result.awaitingActivation?.requiresActivation).toBe(true);
+  });
+
+  it('prefers an activated smaller offer over an unactivated larger one', () => {
+    // $6 the user can claim beats $12 they cannot.
+    const result = bestOffer(
+      [
+        offer({ id: 'small', merchantId: MERCHANT.greenleafMarket, rate: 5, isEnrolled: true }),
+        offer({
+          id: 'large',
+          merchantId: MERCHANT.greenleafMarket,
+          rate: 10,
+          isEnrolled: false,
+        }),
+      ],
+      intent(),
+      valuation(),
+      context().asOf,
+    );
+
+    expect(result.applied?.offer.id).toBe('small');
+    expect(result.awaitingActivation?.offer.id).toBe('large');
   });
 
   it('values a points offer with the user’s per-unit figure', () => {
@@ -246,7 +287,7 @@ describe('bestOffer', () => {
       context().asOf,
     );
 
-    expect(result?.valueUsd).toBe(5.4);
+    expect(result.applied?.valueUsd).toBe(5.4);
   });
 
   it('values a points offer at zero for a cash-back-only user', () => {
@@ -264,7 +305,7 @@ describe('bestOffer', () => {
       context().asOf,
     );
 
-    expect(result?.valueUsd).toBe(0);
+    expect(result.applied?.valueUsd).toBe(0);
   });
 
   it('breaks a value tie on offer id, so the result is stable', () => {
@@ -273,9 +314,11 @@ describe('bestOffer', () => {
       offer({ id: 'aaa', merchantId: MERCHANT.greenleafMarket, rate: 5 }),
     ];
 
-    expect(bestOffer(offers, intent(), valuation(), context().asOf)?.offer.id).toBe('aaa');
+    expect(bestOffer(offers, intent(), valuation(), context().asOf).applied?.offer.id).toBe(
+      'aaa',
+    );
     expect(
-      bestOffer([...offers].reverse(), intent(), valuation(), context().asOf)?.offer.id,
+      bestOffer([...offers].reverse(), intent(), valuation(), context().asOf).applied?.offer.id,
     ).toBe('aaa');
   });
 
@@ -287,8 +330,8 @@ describe('bestOffer', () => {
       context().asOf,
     );
 
-    expect(result?.valueUsd).toBe(5);
-    expect(result?.wasBenefitCapped).toBe(true);
+    expect(result.applied?.valueUsd).toBe(5);
+    expect(result.applied?.wasBenefitCapped).toBe(true);
   });
 
   it('handles a fixed-amount offer type', () => {
@@ -305,7 +348,7 @@ describe('bestOffer', () => {
       context().asOf,
     );
 
-    expect(result?.valueUsd).toBe(15);
+    expect(result.applied?.valueUsd).toBe(15);
   });
 });
 

@@ -168,17 +168,66 @@ reconstructing a breakdown from parts we chose not to store.
 
 ---
 
-## Phase 5 — Offers, caps and preferences
+## Phase 5 — Offers, caps and preferences ✅ Complete
 
-- Offer entry and management; expiring-offer alerts on the dashboard
-- Cap tracker: progress bars, "resets in N days", cap alerts
-- `recordRewardUsage` on accepted recommendations
-- Rotating-category activation reminders
-- Reward preferences: per-program valuations, cash-back-only mode, minimum switch benefit
-- Live recomputation when a valuation changes, so the effect is visible
+**Delivered — the pure layer** (three new modules under `src/domain/rewards/`)
 
-**Exit criteria:** changing a valuation demonstrably changes the ranking. Cap alerts fire at
-the right thresholds. Offers affect recommendations.
+- `capProgress.ts` — cap progress across the whole wallet: consumed, remaining,
+  utilisation, days until reset, and a three-level status. `ample` → `nearly_reached` at 80%
+  → `exhausted` at 100%.
+- `reminders.ts` — the two things that expire quietly: a rotating period that is running but
+  not activated, and an offer inside its final fortnight. One derivation feeds both the
+  "categories now" list and the activation reminder, so they cannot disagree.
+- `usage.ts` — what an accepted recommendation does to a cap. Derived from the breakdown the
+  engine already produced, never recomputed from a rate.
+
+**Delivered — the data layer**
+
+- `features/offers/api` — enter, activate, redeem and delete an offer
+- `features/preferences/api` — per-program valuations, the two wallet-wide switches, and the
+  wallet's programs joined to the user's figures
+- `features/caps/api` — `recordRewardUsage`, a user-typed cap correction, and
+  rotating-bonus activation
+
+**Delivered — the screens**
+
+- Offers (Screen 12): live and finished offers, and a form validated by the same
+  `userOfferSchema` the API trusts
+- Reward preferences (Screen 13): a figure per reward currency, cash-back-only, the minimum
+  switch benefit, and a **live impact card** that re-ranks the wallet as soon as a figure is
+  saved
+- Card details (Screen 11): per-card cap progress and activation, replacing its placeholders
+- Dashboard: activation reminders, cap alerts and expiring offers — each rendering _nothing_
+  when there is nothing to say, so a section appearing is itself the signal
+
+**Exit criteria — met, and each is a test.**
+
+- _Changing a valuation changes the ranking._
+  `features/preferences/valuationRanking.test.ts` runs preference rows → `buildValuation` →
+  `evaluateWallet`. On a $100 restaurant purchase a 4x-points card is worth $6.00 at 1.5¢ and
+  wins; at 0.5¢ it is worth $2.00 and loses to a 3% cash card. The flip is pinned either side
+  of the 0.75¢ break-even.
+- _Cap alerts fire at the right thresholds._ `capProgress.test.ts` asserts 79.98% → ample,
+  exactly 80% → warning, 99.9% → still warning, 100% and 110% → exhausted.
+- _Offers affect recommendations._ `features/offers/offerImpact.test.ts` turns a losing 1%
+  card into the winner with a $10 credit, and pins the six reasons an offer must _not_ apply.
+
+**Two engine defects the new tests found and fixed.**
+
+1. **An unactivated offer was counted.** `bestOffer` added the value of an offer the user had
+   not activated, so a $60 purchase was reported as worth $10.60 when it would actually earn
+   $0.60. Activation now gates the money — matching how an unactivated rotating _rule_ was
+   always treated — and the offer is surfaced as an actionable warning instead.
+2. **A catalog default outranked the user's own figure.** `buildValuation` folded catalog
+   program defaults into `byProgramId` before reading the user's rows, and
+   `resolveCentsPerUnit` checks `byProgramId` first — so a user who set "all my points are
+   worth 0.4¢" was silently overruled by the catalog's 1¢. The four-level precedence is now
+   flattened explicitly, with the reasoning recorded in the function.
+
+**A deliberate limitation, stated in the code.** Only the _primary_ rule's cap is recorded
+when a purchase is confirmed. Two stacked capped rules would leave the secondary cap looking
+emptier than it is. The persisted breakdown carries one `appliedRuleId`, and inferring the
+rest would mean re-deriving a calculation instead of reading one.
 
 ---
 

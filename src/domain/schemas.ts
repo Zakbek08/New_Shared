@@ -285,6 +285,7 @@ export const userOfferSchema = z
   );
 
 export type UserOfferInput = z.infer<typeof userOfferSchema>;
+export type UserOfferFormValues = z.input<typeof userOfferSchema>;
 
 // ---------------------------------------------------------------------------
 // Administrative catalog

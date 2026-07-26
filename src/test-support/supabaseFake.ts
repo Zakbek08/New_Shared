@@ -41,7 +41,11 @@ function buildClient(config: FakeConfig, sink: SupabaseFake) {
   const nextResult = (): TableResult => {
     const result = config.results?.[resultIndex] ?? { data: null, error: null };
     resultIndex += 1;
-    return result;
+    // The real client always returns an explicit `error: null` on success, and the
+    // production code tests `error !== null`. Normalising here means a queued result
+    // that omits `error` behaves like a success rather than tripping every check —
+    // a footgun that cost real debugging time before it was closed.
+    return { data: result.data ?? null, error: result.error ?? null };
   };
 
   const makeBuilder = () => {

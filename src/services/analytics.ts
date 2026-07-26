@@ -31,8 +31,11 @@ export const ANALYTICS_EVENTS = [
   'recommendation_details_viewed',
   'offer_added',
   'offer_enrolled',
+  'offer_removed',
   'preferences_updated',
   'cap_alert_viewed',
+  'reward_usage_recorded',
+  'rotating_category_activated',
   'catalog_rule_edited',
   'catalog_rule_verified',
 ] as const;
