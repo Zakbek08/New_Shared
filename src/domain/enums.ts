@@ -189,6 +189,20 @@ export const VERIFICATION_STATUS_LABELS: Record<VerificationStatus, string> = {
   retired: 'No longer offered',
 };
 
+/**
+ * How the category was arrived at, in the user's words.
+ *
+ * Deliberately blunt about the weaker kinds: "guessed from the name" is what
+ * `inferred` means, and dressing it up would misrepresent how much to trust it.
+ */
+export const CATEGORY_MATCH_KIND_LABELS: Record<CategoryMatchKind, string> = {
+  exact_merchant: 'Matched a known merchant',
+  known_mcc: 'From the merchant category code',
+  user_selected: 'You chose this category',
+  inferred: 'Guessed from the merchant name',
+  unknown: 'Category unknown',
+};
+
 export const CAP_PERIOD_LABELS: Record<CapPeriod, string> = {
   none: 'No cap',
   monthly: 'per month',

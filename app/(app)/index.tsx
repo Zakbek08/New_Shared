@@ -10,6 +10,7 @@
  * region says which phase fills it. Nothing on this screen shows a fabricated
  * reward figure.
  */
+import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 
 import { DemoDataBanner, DisclaimerNotice } from '@/components/Disclaimers';
@@ -20,9 +21,16 @@ import { Screen } from '@/components/ui/Screen';
 import { VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
 import { isDemoDataEnabled } from '@/config/env';
+import { RecentRecommendations } from '@/features/recommendations/ui/RecentRecommendations';
+import { TopCardsByCategory } from '@/features/recommendations/ui/TopCardsByCategory';
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  // Time enters the app here, at the edge, and is passed down. The engine itself
+  // never reads a clock — see CLAUDE.md. Held for the life of the mount so the
+  // category list does not silently re-rank mid-session.
+  const asOf = useMemo(() => new Date(), []);
 
   let showDemoBanner = false;
   try {
@@ -68,17 +76,15 @@ export default function HomeScreen() {
 
         {showDemoBanner ? <DemoDataBanner /> : null}
 
-        <PlaceholderSection
-          phase="Phase 4"
-          title="Your top cards by category"
-          description="Your best card for each of the thirteen categories, computed by the deterministic engine from the rules in your wallet."
-          testID="home-top-cards"
-        />
+        <TopCardsByCategory asOf={asOf} testID="home-top-cards" />
 
-        <PlaceholderSection
-          phase="Phase 4"
-          title="Recently evaluated merchants"
-          description="Your last purchase queries, so a repeat trip to the same shop is one tap."
+        <RecentRecommendations
+          onSelectMerchant={(merchant) =>
+            router.push({
+              pathname: '/(app)/assistant',
+              params: { merchant },
+            })
+          }
           testID="home-recent-merchants"
         />
 

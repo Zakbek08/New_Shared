@@ -49,24 +49,32 @@ device before they are sent, so the server never sees them in plaintext.
 
 ## Status
 
-**Phase 3 complete.** The deterministic rewards engine is built and tested: it takes a
-wallet snapshot, a purchase and an instant, and returns a ranked answer with a full
-arithmetic breakdown. The purchase form and recommendation UI that sit on top of it arrive
-in Phase 4.
+**Phase 4 complete.** The app now answers the question it exists to answer, end to end.
+Describe a purchase — in the form or in a sentence — and WalletWise classifies the
+merchant, loads your wallet, runs the deterministic engine on your device and shows the
+winner, the runner-up and every card that did not qualify, each with a reason. The details
+screen walks through the arithmetic row by row and names the rule and source behind it.
+
+The specification's own example is a test: $120 of groceries at a supermarket with Apple
+Pay returns the 6% card at **$7.20**, with the runner-up at **$6.00**. Every figure in it
+is traced to the seed rule that produced it.
 
 | Phase | Scope                                             | Status         |
 | ----- | ------------------------------------------------- | -------------- |
 | 1     | Architecture, docs, navigation, schema, seed data | ✅ Complete    |
-| 2     | Authentication and wallet management              | ⬜ Not started |
-| 3     | Deterministic rewards engine and its test matrix  | ⬜ Not started |
-| 4     | Purchase form and recommendation UI               | ⬜ Not started |
+| 2     | Authentication and wallet management              | ✅ Complete    |
+| 3     | Deterministic rewards engine and its test matrix  | ✅ Complete    |
+| 4     | Purchase form and recommendation UI               | ✅ Complete    |
 | 5     | User offers, spending caps, reward preferences    | ⬜ Not started |
 | 6     | Administrative catalog and verification workflow  | ⬜ Not started |
 | 7     | Security review, accessibility review, docs       | ⬜ Not started |
 
-Screens currently render their real structure, navigation and design system. Regions
-whose data arrives in a later phase say so on screen, with the phase named — rather than
-displaying placeholder numbers that could be mistaken for real rewards.
+1,264 tests across 37 suites. `src/domain/` sits at 99% statements and 96% branches, and
+those floors are enforced in `jest.config.js` rather than merely reported.
+
+Regions whose data arrives in a later phase — offer alerts, cap progress, the admin
+catalog — say so on screen, with the phase named, rather than displaying placeholder
+numbers that could be mistaken for real rewards.
 
 ---
 

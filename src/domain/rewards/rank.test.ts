@@ -17,6 +17,15 @@ function candidate(options: {
   readonly unit?: RewardUnit;
   readonly warnings?: readonly RecommendationWarning[];
   readonly isEligible?: boolean;
+  /**
+   * A foreign transaction fee, with `net` treated as the already-floored figure.
+   *
+   * Set this to build the abroad case, where two cards both report $0.00 net but
+   * one lost less to the fee.
+   */
+  readonly fee?: number;
+  /** Gross reward before the fee. Defaults to `net`, the no-fee case. */
+  readonly gross?: number;
 }): RecommendationCandidate {
   const breakdown: RewardBreakdown = {
     appliedRuleId: `${options.id}-rule`,
@@ -31,12 +40,12 @@ function candidate(options: {
     withinCapSpendUsd: 0,
     overCapSpendUsd: 0,
     postCapRate: null,
-    grossRewardUnits: options.net,
+    grossRewardUnits: options.gross ?? options.net,
     appliedCentsPerUnit: null,
-    rewardValueUsd: options.net,
+    rewardValueUsd: options.gross ?? options.net,
     offerValueUsd: 0,
     statementCreditUsd: 0,
-    foreignTransactionFeeUsd: 0,
+    foreignTransactionFeeUsd: options.fee ?? 0,
     netValueUsd: options.net,
   };
 
@@ -148,7 +157,23 @@ describe('rankCandidates — ordering', () => {
 });
 
 describe('rankCandidates — tie breaks, in order', () => {
-  it('1. prefers the preferred card', () => {
+  it('1. then the pre-floor net, when a fee wiped out both rewards', () => {
+    // Abroad on a $120 purchase with a 3% fee ($3.60): a 2% card earns $2.40 and a
+    // 0.5% card earns $0.60. Both report $0.00 because a reward is never negative,
+    // but the 2% card costs the user $1.80 less. Ranking them as equal would tell
+    // someone to reach for the worse card.
+    const ranked = rankCandidates(
+      [
+        candidate({ id: 'thin', net: 0, name: 'A Thin', gross: 0.6, fee: 3.6 }),
+        candidate({ id: 'thick', net: 0, name: 'Z Thick', gross: 2.4, fee: 3.6 }),
+      ],
+      0,
+    );
+
+    expect(ranked.recommended?.card.userCardId).toBe('thick');
+  });
+
+  it('2. prefers the preferred card', () => {
     const ranked = rankCandidates(
       [
         candidate({ id: 'plain', net: 5, name: 'A Plain' }),
@@ -161,7 +186,7 @@ describe('rankCandidates — tie breaks, in order', () => {
     expect(ranked.tieBrokenByPreference).toBe(true);
   });
 
-  it('2. then higher confidence', () => {
+  it('3. then higher confidence', () => {
     const ranked = rankCandidates(
       [
         candidate({ id: 'low', net: 5, name: 'A', confidence: 'low' }),
@@ -172,7 +197,7 @@ describe('rankCandidates — tie breaks, in order', () => {
     expect(ranked.recommended?.card.userCardId).toBe('high');
   });
 
-  it('3. then cash back over points', () => {
+  it('4. then cash back over points', () => {
     const ranked = rankCandidates(
       [
         candidate({ id: 'points', net: 5, name: 'A', unit: 'points' }),
@@ -183,7 +208,7 @@ describe('rankCandidates — tie breaks, in order', () => {
     expect(ranked.recommended?.card.userCardId).toBe('cash');
   });
 
-  it('4. then fewer warnings', () => {
+  it('5. then fewer warnings', () => {
     const ranked = rankCandidates(
       [
         candidate({
@@ -199,7 +224,7 @@ describe('rankCandidates — tie breaks, in order', () => {
     expect(ranked.recommended?.card.userCardId).toBe('clean');
   });
 
-  it('5. then alphabetically, so the answer never shifts on refresh', () => {
+  it('6. then alphabetically, so the answer never shifts on refresh', () => {
     const forwards = rankCandidates(
       [
         candidate({ id: 'z', net: 5, name: 'Zebra' }),

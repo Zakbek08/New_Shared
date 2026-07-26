@@ -374,6 +374,71 @@ hand-checked expected value. Retained as the checklist for future changes to the
 
 ---
 
+## Phase 4 coverage — 13 further suites
+
+Total after Phase 4: **1,281 tests across 39 suites.** Counts are from `jest --json`.
+
+| Suite                                                            | Tests | Covers                                                        |
+| ---------------------------------------------------------------- | ----- | ------------------------------------------------------------- |
+| `src/domain/purchaseText/parse.test.ts`                          | 59    | Free-text parsing: amounts, payment method, channel, category |
+| `src/features/recommendations/ruleFacts.test.ts`                 | 32    | The wording of "why this rule applied", per condition field   |
+| `src/features/recommendations/api/snapshot.test.ts`              | 25    | The database-to-engine mapping, and valuation resolution      |
+| `src/domain/classifier/classify.test.ts`                         | 23    | Match precedence, coding warnings, user disagreement          |
+| `src/features/recommendations/specificationExample.test.ts`      | 14    | **The specification example, end to end**                     |
+| `app/recommendations/results.test.tsx`                           | 14    | The results screen, including its screen-reader labels        |
+| `src/lib/int4range.test.ts`                                      | 13    | Postgres half-open ranges → inclusive MCC bounds              |
+| `app/recommendations/details.test.tsx`                           | 13    | The audit trail, and its refusal to explain the wrong answer  |
+| `src/features/recommendations/ui/CandidateCard.test.tsx`         | 12    | Colour is never the only signal; the row reads as one thought |
+| `src/features/recommendations/topCards.test.ts`                  | 11    | Per-category best card, and the honest gaps                   |
+| `src/features/recommendations/ui/BreakdownTable.test.ts`         | 10    | Every arithmetic row, with the sum written out in the test    |
+| `src/features/recommendations/ui/RecentRecommendations.test.tsx` | 9     | History rows: labels, touch targets, "no card qualified"      |
+| `src/features/recommendations/ui/TopCardsByCategory.test.tsx`    | 8     | The dashboard card, including its uncovered-category wording  |
+
+`purity.test.ts` also grew from 195 to 231 assertions, because it discovers domain modules by
+reading the directory — the classifier and the free-text parser were held to the same rules
+the moment they existed, without anyone remembering to add them.
+
+### The specification example is a test, not a demo
+
+`specificationExample.test.ts` builds two cards from `supabase/seed/05_demo_reward_rules.sql`
+and runs the two pure steps the app runs — `classifyPurchase`, then `evaluateWallet`:
+
+```
+$120.00 × 6% = $7.20   rule 66666666-…-000000000102, $6,000/yr cap untouched
+$120.00 × 5% = $6.00   rule 66666666-…-000000000503, Q3 2026, activated
+advantage    = $1.20
+```
+
+It also pins the variations that change the answer: the rotator drops to **$1.20** when the
+quarter is not activated, the grocery card drops to **$1.20** at the excluded warehouse club
+(with the amber coding warning), and a nearly-exhausted cap splits $120 into $50 at 6% and
+$70 at 1% for **$3.70**.
+
+### Two defects these suites caught
+
+1. **Ranking lost the fee difference.** `compareCandidates` compared `netValueUsd`, which is
+   floored at zero. Abroad, a card earning $2.40 against a $3.60 fee and one earning $0.60
+   against the same fee both reported $0.00 and tied — so the tie-break handed the answer to
+   whichever was preferred or alphabetically first, when one genuinely cost $1.80 less. The
+   comparator now falls through to the pre-floor figure. Display is unchanged: a reward is
+   still never shown as negative.
+2. **The explanation made the user do arithmetic.** It said "$1.20 more than your next best
+   option" without saying what that option earned. The specification asks for the second-best
+   amount outright, so it now states it.
+
+### Screens are tested through the engine, not around it
+
+No screen test hand-writes a reward figure. Each one evaluates a real wallet and renders what
+came back, so a component that quietly reformatted `$7.20` into something else would fail.
+Two assertions exist purely to catch a fabricated number:
+
+- the results and details screens, in their empty states, are asserted to contain **no
+  dollar figure at all** (`expect(JSON.stringify(toJSON())).not.toMatch(/\$\d/)`);
+- an ineligible card is asserted **not** to render `$0.00`, because a dollar amount beside
+  "Not eligible" reads as money the user could have earned.
+
+---
+
 ## Integration and RLS testing (Phase 7)
 
 Structural RLS assertions catch a missing policy but not a wrong predicate. Phase 7 adds
@@ -404,8 +469,8 @@ Thresholds in `jest.config.js` are a floor, not a target:
 | Everything else       | 55         | 55       | 40        | 55    |
 
 The engine's are high because it is pure, total and has no excuse. The global figure is
-dragged down by UI scaffolding whose behaviour arrives in Phases 4-6, and should rise with
-each phase.
+dragged down by UI scaffolding whose behaviour arrives in Phases 5-6, and should rise with
+each phase — it stood at 55% after Phase 3 and is 77% after Phase 4.
 
 Note that a path-specific threshold _removes_ those files from the global calculation, so
 the global row describes everything outside `src/domain/`.

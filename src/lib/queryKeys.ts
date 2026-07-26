@@ -22,5 +22,15 @@ export const queryKeys = {
     all: ['wallet'] as const,
     cards: () => ['wallet', 'cards'] as const,
     card: (id: string) => ['wallet', 'card', id] as const,
+    // The engine's input snapshot. Under `wallet` so adding or editing a card
+    // invalidates it along with the card list.
+    snapshot: () => ['wallet', 'snapshot'] as const,
+  },
+  recommendations: {
+    all: ['recommendations'] as const,
+    recent: (limit: number) => ['recommendations', 'recent', limit] as const,
+    detail: (id: string) => ['recommendations', 'detail', id] as const,
+    merchantSearch: (search: string, countryCode: string) =>
+      ['recommendations', 'merchants', countryCode, search] as const,
   },
 } as const;

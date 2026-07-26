@@ -227,6 +227,37 @@ describe('explainRecommendation', () => {
     expect(explanation).toContain('your own figure');
   });
 
+  it('states the runner-up’s own figure, not only the gap', () => {
+    // $120 at 6% is $7.20; at 5% it is $6.00. The specification asks for the
+    // second-best amount outright — "$1.20 better" alone makes the user subtract.
+    const winner = card({
+      userCardId: 'six',
+      displayName: 'Six Percent Card',
+      rules: [categoryRule({ id: 'six-bonus', categoryId: CATEGORY.grocery, rate: 6 })],
+    });
+    const second = card({
+      userCardId: 'five',
+      displayName: 'Five Percent Card',
+      rules: [categoryRule({ id: 'five-bonus', categoryId: CATEGORY.grocery, rate: 5 })],
+    });
+
+    const explanation = evaluate([winner, second]).explanation;
+
+    expect(explanation).toContain('$1.20 more than your next best option');
+    expect(explanation).toContain('Five Percent Card');
+    expect(explanation).toContain('would earn about $6.00');
+  });
+
+  it('states the equal amount when two cards tie', () => {
+    const a = flatCard(2, { userCardId: 'a', displayName: 'A Card' });
+    const b = flatCard(2, { userCardId: 'b', displayName: 'B Card' });
+
+    // $120 × 2% = $2.40 on both.
+    const explanation = evaluate([a, b]).explanation;
+
+    expect(explanation).toContain('earns the same amount, about $2.40');
+  });
+
   it('explains a minimum-benefit hold in the user’s terms', () => {
     const preferred = flatCard(2, {
       userCardId: 'pref',

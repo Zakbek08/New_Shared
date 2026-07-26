@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
+import { RecommendationProvider } from '@/features/recommendations/RecommendationProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 
 /**
@@ -42,11 +43,17 @@ export function AppProviders({ children }: { readonly children: ReactNode }) {
 
   // AuthProvider sits *inside* QueryClientProvider because it clears the cache
   // when the signed-in user changes, which needs `useQueryClient`.
+  //
+  // RecommendationProvider is innermost: it holds the latest engine result in
+  // memory, and that result is meaningless once the signed-in user changes, so it
+  // must be remounted by anything above it rather than outlive it.
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <RecommendationProvider>{children}</RecommendationProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </ThemeProvider>
     </SafeAreaProvider>

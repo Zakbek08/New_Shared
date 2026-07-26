@@ -102,23 +102,69 @@ the ranking.
 
 ---
 
-## Phase 4 — Purchase form and recommendation UI
+## Phase 4 — Purchase form and recommendation UI ✅ Complete
 
-- Purchase form with React Hook Form + Zod: merchant, amount, category, channel, country,
-  currency, payment method, notes
-- Quick-category buttons (already rendering from the shared taxonomy)
-- Merchant autocomplete against the catalog
+**Delivered — the pure layer**
+
 - **Classifier** (`src/domain/classifier/`): exact merchant → known MCC → user-selected →
-  inferred, emitting match kind, confidence and the coding warning
-- Optional natural-language entry: an LLM turns free text into structured fields, validated
-  by the same schema. **It produces no rates.**
-- Results screen: winner in green, runner-up beside it, ineligible cards with reasons
-- Details screen: the full breakdown, step by step, with provenance
-- Home dashboard: top cards by category, recently evaluated merchants
+  inferred → unknown, emitting match kind, confidence, alternatives and the coding warning.
+  A known merchant's own coding **outranks** the user's category choice, because the issuer
+  decides the coding; the disagreement is surfaced rather than hidden.
+- **Free-text parser** (`src/domain/purchaseText/`): amount, payment method, channel,
+  category and merchant out of a sentence. Deterministic, conservative, and it produces no
+  rate. Tapping a phone and tapping a card are distinguished, because a mobile-wallet bonus
+  turns on exactly that difference.
 
-**Exit criteria:** the specification example works end to end — $120 grocery at a
-supermarket with Apple Pay returns the 6% card at $7.20 with the runner-up at $6.00. Every
-figure traceable to a database record. Screen-reader pass on the results screen.
+**Delivered — the data boundary**
+
+- `api/snapshot.ts` materialises the engine's entire input in one query, then hands a pure
+  function a fully-formed snapshot
+- `lib/int4range.ts` converts Postgres's canonicalised `[5411,5412)` back to the inclusive
+  `[5411, 5411]` the engine expects — without it every MCC range would be one code wider
+- `api/recommendations.ts` records the query and persists the answer, including every card
+  that did **not** qualify, so an old answer stays explainable
+
+**Delivered — the screens**
+
+- Purchase assistant: free-text box, merchant autocomplete, amount, thirteen category chips,
+  channel, payment method, country, currency, notes
+- Results screen: winner in green, runner-up beside it with the gap in dollars, remaining
+  eligible cards, and every ineligible card with its reason
+- Details screen: the full breakdown row by row, the rule that won, what that rule required,
+  the other rules considered on the same card, how the category was decided, and the source's
+  verification state
+- Home dashboard: top card per category (the real engine, run against a $100 reference
+  purchase) and recently evaluated merchants
+
+**Exit criteria — met.** `src/features/recommendations/specificationExample.test.ts` runs the
+specification's own example end to end against the fictional seed catalog: $120 of groceries
+at a supermarket returns the 6% card at **$7.20**, with the activated 5% rotating-category
+card as runner-up at **$6.00** and the advantage reported as **$1.20**. Every figure is
+traced in the test to the seed rule that produced it. The results and details screens each
+have a screen-reader suite asserting composed labels, text alongside every colour, and honest
+empty states.
+
+**Two engine defects found and fixed by the new tests.**
+
+1. `compareCandidates` ranked on the zero-floored net value, so abroad two cards whose
+   rewards were both wiped out by a foreign transaction fee tied — even when one lost
+   $1.80 less. Ranking now falls through to the pre-floor figure, while display still never
+   shows a negative reward.
+2. The explanation stated only the gap to the runner-up ("$1.20 more"), leaving the user to
+   do the subtraction. It now states the runner-up's own figure too, as the specification
+   asks.
+
+**Deliberately not built.** The optional natural-language path is the deterministic parser
+in `src/domain/purchaseText/`, not a model call. A model would be permitted here — the two
+allowed uses in CLAUDE.md cover exactly this — but a parser that can be unit-tested against
+hand-checked expectations is better for the same job, and it cannot fail closed into a
+guessed rate. The model-backed variant, behind a server-side key, is Phase 7.
+
+**Known limitation, stated on screen.** The workings behind a recommendation are held in
+memory only, because `RecommendationResult` carries the full rule-and-cap snapshot each
+figure was derived from and that snapshot is deliberately not persisted. Opening the results
+or details screen after a restart therefore finds nothing, and says so, rather than
+reconstructing a breakdown from parts we chose not to store.
 
 ---
 

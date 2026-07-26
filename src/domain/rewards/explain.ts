@@ -189,10 +189,16 @@ export function explainRecommendation(options: {
     } else if (options.tieBrokenByPreference) {
       sentences.push(`Your ${runnerUpName} earns the same, so we kept your preferred card.`);
     } else if (advantage === 0) {
-      sentences.push(`Your ${runnerUpName} earns the same amount.`);
-    } else {
       sentences.push(
-        `That is ${formatUsd(advantage)} more than your next best option, the ${runnerUpName}.`,
+        `Your ${runnerUpName} earns the same amount, about ${describeReward(runnerUp)}.`,
+      );
+    } else {
+      // The runner-up's own figure is stated, not just the gap. A user comparing
+      // "$1.20 better" against nothing has to do the subtraction themselves, and
+      // the specification asks for the second-best amount outright.
+      sentences.push(
+        `That is ${formatUsd(advantage)} more than your next best option, the ${runnerUpName}, ` +
+          `which would earn about ${describeReward(runnerUp)}.`,
       );
     }
   }

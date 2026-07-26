@@ -13,17 +13,38 @@ import { roundUsd } from './money';
 import type { RecommendationCandidate } from './types';
 
 /**
+ * Net value *before* the zero floor.
+ *
+ * `netValueUsd` is clamped at zero because a reward is never negative. That is
+ * right for display and wrong for ranking: abroad, a card earning 2% against a 3%
+ * fee and one earning 0.5% against the same fee both report $0.00, yet the first
+ * costs the user a dollar less on a $120 purchase. Ranking on the unclamped figure
+ * keeps that difference, without ever showing a negative reward.
+ */
+function unclampedNetValueUsd(candidate: RecommendationCandidate): number {
+  const { breakdown } = candidate;
+  return roundUsd(
+    breakdown.rewardValueUsd +
+      breakdown.statementCreditUsd +
+      breakdown.offerValueUsd -
+      breakdown.foreignTransactionFeeUsd,
+  );
+}
+
+/**
  * Compares two eligible candidates, best first.
  *
  * Order, and why each step is where it is:
  *   1. **Net value** — the whole point.
- *   2. **The user's preferred card** — when the money is identical, respect the
+ *   2. **Net value before the zero floor** — separates two cards whose rewards
+ *      were both wiped out by a fee, where one was wiped out by less.
+ *   3. **The user's preferred card** — when the money is identical, respect the
  *      card they said they like.
- *   3. **Confidence** — an equal figure we are surer of is worth more.
- *   4. **Cash back over points** — cash needs no redemption effort, so at equal
+ *   4. **Confidence** — an equal figure we are surer of is worth more.
+ *   5. **Cash back over points** — cash needs no redemption effort, so at equal
  *      estimated value it is genuinely better.
- *   5. **Fewer warnings** — fewer caveats to act on.
- *   6. **Name** — arbitrary, but *stable*.
+ *   6. **Fewer warnings** — fewer caveats to act on.
+ *   7. **Name** — arbitrary, but *stable*.
  */
 export function compareCandidates(
   a: RecommendationCandidate,
@@ -31,6 +52,12 @@ export function compareCandidates(
 ): number {
   if (a.breakdown.netValueUsd !== b.breakdown.netValueUsd) {
     return b.breakdown.netValueUsd - a.breakdown.netValueUsd;
+  }
+
+  const unclampedA = unclampedNetValueUsd(a);
+  const unclampedB = unclampedNetValueUsd(b);
+  if (unclampedA !== unclampedB) {
+    return unclampedB - unclampedA;
   }
 
   if (a.card.isPreferred !== b.card.isPreferred) {

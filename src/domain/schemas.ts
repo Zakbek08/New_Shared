@@ -222,6 +222,7 @@ export const purchaseIntentSchema = z.object({
 });
 
 export type PurchaseIntentInput = z.infer<typeof purchaseIntentSchema>;
+export type PurchaseIntentFormValues = z.input<typeof purchaseIntentSchema>;
 
 /** Free-text entry, before the classifier turns it into a structured intent. */
 export const naturalLanguagePurchaseSchema = z.object({
