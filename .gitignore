@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native projects (managed workflow — generated via prebuild)
+/android
+/ios
+
+# Secrets — NEVER commit these. See SECURITY.md.
+.env
+.env.local
+.env.*.local
+*.pem
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# Supabase local stack
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# Testing
+coverage/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Caches
+.eslintcache
+.prettiercache
+*.tsbuildinfo
