@@ -7,11 +7,13 @@
 import { useRouter } from 'expo-router';
 
 import { PlaceholderSection } from '@/components/PlaceholderSection';
+import { ErrorNotice } from '@/components/StateViews';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
 import { HStack, VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
+import { useProfile, useSignOut } from '@/features/auth/hooks';
 import { useThemePreference, type ThemePreference } from '@/theme/ThemeProvider';
 
 const APPEARANCE_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
@@ -23,13 +25,22 @@ const APPEARANCE_OPTIONS: readonly { value: ThemePreference; label: string }[] =
 export default function SettingsScreen() {
   const router = useRouter();
   const { preference, setPreference } = useThemePreference();
+  const profile = useProfile();
+  const signOut = useSignOut();
 
   return (
     <Screen scroll accessibilityLabel="Settings" testID="settings-screen">
       <VStack gap="xl">
-        <Text variant="title1" accessibilityRole="header">
-          Settings
-        </Text>
+        <VStack gap="xs">
+          <Text variant="title1" accessibilityRole="header">
+            Settings
+          </Text>
+          {profile.data?.email !== null && profile.data?.email !== undefined ? (
+            <Text variant="callout" tone="secondary">
+              Signed in as {profile.data.email}
+            </Text>
+          ) : null}
+        </VStack>
 
         <Card>
           <VStack gap="md">
@@ -98,11 +109,36 @@ export default function SettingsScreen() {
           </VStack>
         </Card>
 
+        <Card>
+          <VStack gap="md">
+            <Text variant="title3" accessibilityRole="header">
+              Account
+            </Text>
+            {signOut.isError ? (
+              <ErrorNotice error={signOut.error} testID="settings-signout-error" />
+            ) : null}
+            <Button
+              label="Sign out"
+              variant="secondary"
+              fullWidth
+              loading={signOut.isPending}
+              onPress={() => signOut.mutate()}
+              accessibilityHint="Signs you out on this device"
+              testID="settings-sign-out"
+            />
+            <Text variant="footnote" tone="tertiary">
+              Signing out clears the cached copy of your wallet from this device. The encryption
+              key for your stored card digits is kept, so they still work when you sign back in
+              here.
+            </Text>
+          </VStack>
+        </Card>
+
         <PlaceholderSection
-          phase="Phase 2"
-          title="Account"
-          description="Change password, sign out, export your data and delete your account. Deleting the account removes every row you own by database cascade."
-          testID="settings-account"
+          phase="Phase 7"
+          title="Export and delete your account"
+          description="Download everything WalletWise holds about you as JSON, or delete your account. Deleting removes every row you own by database cascade, and wipes this device's encryption key."
+          testID="settings-account-data"
         />
       </VStack>
     </Screen>

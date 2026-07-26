@@ -31,31 +31,43 @@ figure appears anywhere.
 
 ---
 
-## Phase 2 — Authentication and wallet management
+## Phase 2 — Authentication and wallet management ✅ Complete
 
-**Auth**
+**Delivered — auth**
 
-- Registration with the Zod schema, email confirmation, disclaimer acceptance recorded
+- Registration with the Zod schema, email confirmation, and disclaimer acceptance recorded
   against `disclaimers_accepted_version`
-- Sign in, sign out, password reset
-- Session in the device keystore; route guards in `app/_layout.tsx`
-- Auth-state → Query cache invalidation
+- Sign in, sign out, password reset (with an enumeration-safe response)
+- Session in the device keystore; route guard in `app/_layout.tsx`
+- `AuthProvider` clears the Query cache whenever the signed-in user changes
 
-**Wallet**
+**Delivered — wallet**
 
 - Catalog search with headline rates and verification dates
 - Add a card: nickname, optional last four, account open date, preferred flag
-- **Device-side encryption for the last four** (`src/lib/lastFour.ts`) — `expo-crypto`
-  AES-GCM with a key in SecureStore, key id recorded
-- Custom card creation, owned by the user, rates marked `user_reported`
-- Wallet list: reorder, archive, exclude from recommendations
-- Card details from real data
+- **Device-side encryption for the last four** (`src/lib/lastFour.ts`) — AES-256-GCM via
+  `@noble/ciphers`, key in SecureStore, key id recorded for rotation
+- Custom card creation, owned by the user, rate stored as `user_reported`
+- Wallet list with archive, restore, reorder and exclude-from-recommendations
+- Card details from real data, showing each rule's rate and verification state
 
-**Also:** data export, account deletion, "load demo wallet" for local development.
+**Corrected from the Phase 1 plan.** This document previously said the last four digits
+would be encrypted with "`expo-crypto` AES-GCM". That was wrong: `expo-crypto` provides
+randomness and digests only, and React Native has no dependable `crypto.subtle`. Phase 2
+uses `@noble/ciphers` — audited, dependency-free, pure TypeScript, identical on Hermes and
+in Node — with `expo-crypto` supplying the key and nonce bytes.
 
-**Exit criteria:** a user can register, add cards and see them. RLS integration tests prove
-User A cannot read User B's wallet. Encryption round-trips and the server never receives
-plaintext digits.
+**Also delivered:** a migration making `card_products.issuer_id` nullable with a new
+`custom_issuer_name`. Without it the custom-card flow could not work at all, because
+`issuers` is writable only by catalog editors, so a member could never satisfy the
+foreign key.
+
+**Deferred to Phase 7:** data export and account deletion. Both are listed on the Settings
+screen as not-yet-built rather than silently missing.
+
+**Not yet done:** RLS _integration_ tests against real Postgres. The structural assertions
+in `schema.test.ts` prove the policies exist and are shaped correctly; proving User A
+cannot read User B's wallet needs a live database, and is scheduled for Phase 7.
 
 ---
 

@@ -43,7 +43,8 @@ The fourteen modules from the specification, and where each lives.
 | 13  | Source verification and audit history      | `supabase/` (`sources`, `verification_history`, `audit_logs`) | 1, 6  |
 | 14  | Analytics and error monitoring abstraction | `src/services/`                                               | 1     |
 
-Modules 1, 7, 11, 13 and 14 have their Phase 1 foundations in place. The rest have their
+Modules 1, 7, 11, 13 and 14 have their Phase 1 foundations in place. Modules 2, 3 and 4 —
+authentication, card catalog and user wallet — are complete as of Phase 2. The rest have their
 contracts defined and their screens scaffolded.
 
 ---

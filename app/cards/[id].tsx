@@ -1,45 +1,241 @@
 /**
  * Screen 11 — Card Details.
  *
- * Everything WalletWise knows about one card in the wallet: its rules, caps,
- * enrollment state, fees and where each rate came from.
+ * Everything WalletWise knows about one card in the wallet, plus the settings the
+ * user can change. Cap progress, enrollment and provenance arrive in Phases 5-6.
  */
-import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DisclaimerNotice } from '@/components/Disclaimers';
 import { PlaceholderSection } from '@/components/PlaceholderSection';
+import { ErrorNotice, LoadingState } from '@/components/StateViews';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Screen } from '@/components/ui/Screen';
-import { VStack } from '@/components/ui/Stack';
+import { Divider, HStack, VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
+import { TextField } from '@/components/ui/TextField';
+import { Toggle } from '@/components/ui/Toggle';
+import { VERIFICATION_STATUS_LABELS } from '@/domain/enums';
+import {
+  useArchiveUserCard,
+  useCardProduct,
+  useRestoreUserCard,
+  useUpdateUserCard,
+  useWalletCard,
+} from '@/features/wallet/hooks';
+import {
+  formatCardName,
+  formatRewardRate,
+  formatUsdCompact,
+  formatVerifiedOn,
+} from '@/lib/format';
+import { decryptLastFour, MASKED_LAST_FOUR } from '@/lib/lastFour';
 
 export default function CardDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+
+  const card = useWalletCard(id);
+  const product = useCardProduct(card.data?.cardProductId);
+  const updateCard = useUpdateUserCard();
+  const archiveCard = useArchiveUserCard();
+  const restoreCard = useRestoreUserCard();
+
+  const [nickname, setNickname] = useState<string | null>(null);
+  const [digits, setDigits] = useState<string | null>(null);
+
+  // Seed the nickname field once, from the loaded row.
+  useEffect(() => {
+    if (card.data !== undefined && nickname === null) {
+      setNickname(card.data.nickname ?? '');
+    }
+  }, [card.data, nickname]);
+
+  useEffect(() => {
+    if (card.data === undefined) return;
+    let cancelled = false;
+    void decryptLastFour(card.data.lastFourCipher, card.data.lastFourKeyId).then((value) => {
+      if (!cancelled) setDigits(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [card.data]);
+
+  if (card.isPending) {
+    return (
+      <Screen accessibilityLabel="Card details">
+        <LoadingState label="Loading this card" testID="card-details-loading" />
+      </Screen>
+    );
+  }
+
+  if (card.isError || card.data === undefined) {
+    return (
+      <Screen accessibilityLabel="Card details">
+        <ErrorNotice
+          error={card.error}
+          onRetry={() => void card.refetch()}
+          testID="card-details-error"
+        />
+      </Screen>
+    );
+  }
+
+  const wallet = card.data;
+  const displayName = formatCardName(wallet.productName, wallet.nickname);
+  const hasStoredDigits = wallet.lastFourCipher !== null;
 
   return (
-    <Screen scroll accessibilityLabel="Card details" testID="card-details-screen">
+    <Screen scroll accessibilityLabel={`${displayName} details`} testID="card-details-screen">
       <VStack gap="xl">
-        <VStack gap="sm">
+        <VStack gap="xs">
           <Text variant="title1" accessibilityRole="header">
-            Card details
+            {displayName}
           </Text>
-          <Text variant="footnote" tone="tertiary">
-            Wallet entry {id ?? 'unknown'}
+          <Text variant="callout" tone="secondary">
+            {wallet.issuerName}
+            {hasStoredDigits ? ` · ${digits ?? MASKED_LAST_FOUR}` : ''}
           </Text>
+          {hasStoredDigits && digits === null ? (
+            <Text variant="caption" tone="tertiary">
+              The last four digits were encrypted on a different device, so we cannot show them
+              here. Your card still works normally.
+            </Text>
+          ) : null}
         </VStack>
 
-        <PlaceholderSection
-          phase="Phase 2"
-          title="Card summary"
-          description="Issuer, product, nickname, annual fee, foreign transaction fee and the countries where the card earns."
-          testID="card-details-summary"
-        />
+        <HStack gap="sm" wrap align="flex-start">
+          {wallet.isFictional ? <Badge label="Demo data" tone="accent" glyph="i" /> : null}
+          {wallet.isUserDefined ? <Badge label="Your own card" tone="neutral" /> : null}
+          {wallet.annualFeeUsd > 0 ? (
+            <Badge
+              label={`${formatUsdCompact(wallet.annualFeeUsd)} annual fee`}
+              tone="neutral"
+            />
+          ) : (
+            <Badge label="No annual fee" tone="best" glyph="✓" />
+          )}
+          {wallet.foreignTransactionFeePercent === 0 ? (
+            <Badge label="No FX fee" tone="best" glyph="✓" />
+          ) : (
+            <Badge
+              label={`${wallet.foreignTransactionFeePercent}% FX fee`}
+              tone="negative"
+              glyph="−"
+              accessibilityLabel={`${wallet.foreignTransactionFeePercent} percent foreign transaction fee`}
+            />
+          )}
+        </HStack>
 
-        <PlaceholderSection
-          phase="Phase 3"
-          title="Earn rates"
-          description="Every active reward rule with its rate, category, cap, cap period and validity window — the same records the engine reads."
-          testID="card-details-rules"
-        />
+        {/* ---- Earn rates, straight from the rules the engine will read ---- */}
+        <Card>
+          <VStack gap="md">
+            <Text variant="title3" accessibilityRole="header">
+              Earn rates
+            </Text>
+
+            {product.isPending ? (
+              <LoadingState label="Loading earn rates" />
+            ) : product.isError ? (
+              <ErrorNotice error={product.error} onRetry={() => void product.refetch()} />
+            ) : (product.data?.rules ?? []).length === 0 ? (
+              <Text variant="callout" tone="warning">
+                No earn rates are recorded for this card yet.
+              </Text>
+            ) : (
+              <VStack gap="md">
+                {(product.data?.rules ?? []).map((rule, index) => (
+                  <VStack key={rule.id} gap="xs">
+                    {index > 0 ? <Divider /> : null}
+                    <HStack gap="sm" justify="space-between" align="flex-start">
+                      <Text variant="body" style={{ flex: 1 }}>
+                        {rule.label}
+                      </Text>
+                      <Text variant="bodyStrong" tone="accent" tabularNumbers>
+                        {formatRewardRate(rule.base_rate + rule.bonus_rate, rule.reward_type)}
+                      </Text>
+                    </HStack>
+                    <HStack gap="sm" wrap align="flex-start">
+                      <Badge
+                        label={VERIFICATION_STATUS_LABELS[rule.verification_status]}
+                        tone={rule.verification_status === 'verified' ? 'best' : 'uncertain'}
+                        glyph={rule.verification_status === 'verified' ? '✓' : '!'}
+                      />
+                      <Badge label={formatVerifiedOn(rule.last_verified_at)} tone="neutral" />
+                      {rule.requires_enrollment ? (
+                        <Badge label="Needs activation" tone="uncertain" glyph="!" />
+                      ) : null}
+                      {rule.cap_amount !== null ? (
+                        <Badge
+                          label={`Capped at ${formatUsdCompact(rule.cap_amount)}`}
+                          tone="neutral"
+                        />
+                      ) : null}
+                    </HStack>
+                  </VStack>
+                ))}
+              </VStack>
+            )}
+          </VStack>
+        </Card>
+
+        {/* ---- Settings ---- */}
+        <Card>
+          <VStack gap="lg">
+            <Text variant="title3" accessibilityRole="header">
+              Your settings
+            </Text>
+
+            <TextField
+              label="Nickname"
+              hint="Helps you tell similar cards apart."
+              value={nickname ?? ''}
+              onChangeText={setNickname}
+              onBlur={() => {
+                const next = (nickname ?? '').trim();
+                if (next !== (wallet.nickname ?? '')) {
+                  updateCard.mutate({
+                    id: wallet.id,
+                    patch: { nickname: next.length === 0 ? null : next },
+                  });
+                }
+              }}
+              maxLength={40}
+              testID="card-details-nickname"
+            />
+
+            <Toggle
+              label="Preferred card"
+              description="Breaks ties in this card's favour, and avoids suggesting a switch away from it for a trivial gain."
+              value={wallet.isPreferred}
+              onValueChange={(value) =>
+                updateCard.mutate({ id: wallet.id, patch: { isPreferred: value } })
+              }
+              testID="card-details-preferred"
+            />
+
+            <Toggle
+              label="Include in recommendations"
+              description="Turn this off to stop WalletWise suggesting this card, without losing it from your wallet."
+              value={!wallet.isExcludedFromRecommendations}
+              onValueChange={(value) =>
+                updateCard.mutate({
+                  id: wallet.id,
+                  patch: { isExcludedFromRecommendations: !value },
+                })
+              }
+              testID="card-details-included"
+            />
+
+            {updateCard.isError ? (
+              <ErrorNotice error={updateCard.error} testID="card-details-update-error" />
+            ) : null}
+          </VStack>
+        </Card>
 
         <PlaceholderSection
           phase="Phase 5"
@@ -58,9 +254,47 @@ export default function CardDetailsScreen() {
         <PlaceholderSection
           phase="Phase 6"
           title="Where these rates came from"
-          description="The source behind each rule, when it was last verified, and its full verification history."
+          description="The source behind each rule and its full verification history."
           testID="card-details-sources"
         />
+
+        {/* ---- Archive / restore ---- */}
+        <Card emphasis={wallet.isArchived ? 'neutral' : 'negative'}>
+          <VStack gap="md">
+            <Text variant="title3" accessibilityRole="header">
+              {wallet.isArchived ? 'Archived card' : 'Remove from your wallet'}
+            </Text>
+            <Text variant="callout" tone="secondary">
+              {wallet.isArchived
+                ? 'This card is archived. It stays in your history but is never recommended.'
+                : 'Archiving keeps your past recommendations explainable. We do not delete the card, because old answers reference it.'}
+            </Text>
+            {wallet.isArchived ? (
+              <Button
+                label="Restore this card"
+                variant="secondary"
+                fullWidth
+                loading={restoreCard.isPending}
+                onPress={() =>
+                  restoreCard.mutate(wallet.id, { onSuccess: () => void card.refetch() })
+                }
+                testID="card-details-restore"
+              />
+            ) : (
+              <Button
+                label="Archive this card"
+                variant="danger"
+                fullWidth
+                loading={archiveCard.isPending}
+                onPress={() =>
+                  archiveCard.mutate(wallet.id, { onSuccess: () => router.back() })
+                }
+                accessibilityHint="Stops this card being recommended and hides it from your wallet"
+                testID="card-details-archive"
+              />
+            )}
+          </VStack>
+        </Card>
 
         <DisclaimerNotice kind="financial" />
       </VStack>

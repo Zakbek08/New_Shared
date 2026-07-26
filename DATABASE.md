@@ -23,6 +23,7 @@ supabase db reset   # re-apply migrations, reload the fictional seed catalog
 | `…000600_queries_and_recommendations.sql` | `purchase_queries`, `recommendations`, `recommendation_candidates`                                       |
 | `…000700_audit_logs.sql`                  | `audit_logs` and the generic audit trigger                                                               |
 | `…000800_row_level_security.sql`          | RLS enablement and every policy                                                                          |
+| `20260702000100_custom_card_issuer.sql`   | Nullable `issuer_id` plus `custom_issuer_name`, so a member can create a private card                    |
 
 ## Conventions
 
@@ -100,7 +101,14 @@ The currency a card earns into.
 | `annual_fee_usd`                  | Displayed; not amortised into a per-purchase figure                                                                    |
 | `foreign_transaction_fee_percent` | `0-20`. Subtracted by the engine on foreign-currency purchases.                                                        |
 | `supported_country_codes`         | `char(2)[]`, default `{US}`                                                                                            |
+| `issuer_id`                       | Required on a catalog row, always `null` on a user-defined one                                                         |
+| `custom_issuer_name`              | The reverse: free text on a user-defined row, `null` on a catalog row                                                  |
 | `is_user_defined`, `created_by`   | A user's custom card. Two CHECKs keep these consistent: a user-defined row must have an owner, a catalog row must not. |
+
+`card_products_issuer_source` enforces the issuer split. It exists because `issuers` is
+writable only by catalog editors, so a member creating a private card could never satisfy a
+`NOT NULL` foreign key to it — and opening that table to members would mean letting anyone
+write shared reference data for the sake of a display string.
 
 ### `merchant_categories`
 

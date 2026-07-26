@@ -26,13 +26,33 @@ const environmentSchema = z.object({
 
 export type Environment = z.infer<typeof environmentSchema>;
 
-function readBoolean(value: string | undefined, fallback: boolean): boolean {
+/**
+ * The single place `process.env` is read.
+ *
+ * Narrowed explicitly because the ambient type of `process.env` depends on which
+ * `@types/node` the toolchain happens to load — under some configurations it
+ * resolves to `any`, which would let an unchecked value flow onward. Metro
+ * inlines `EXPO_PUBLIC_*` as string literals at build time, so a string-or-
+ * undefined view of it is exactly right.
+ */
+function readRaw(name: string): string | undefined {
+  const environment = process.env as Record<string, string | undefined>;
+  return environment[name];
+}
+
+function readBoolean(name: string, fallback: boolean): boolean {
+  const value = readRaw(name);
   if (value === undefined || value === '') return fallback;
   return value === 'true' || value === '1';
 }
 
-function readOptional(value: string | undefined): string | null {
+function readOptional(name: string): string | null {
+  const value = readRaw(name);
   return value === undefined || value === '' ? null : value;
+}
+
+function readString(name: string, fallback = ''): string {
+  return readRaw(name) ?? fallback;
 }
 
 /**
@@ -45,12 +65,12 @@ function readOptional(value: string | undefined): string | null {
  */
 function loadEnvironment(): Environment {
   const candidate = {
-    supabaseUrl: process.env['EXPO_PUBLIC_SUPABASE_URL'] ?? '',
-    supabaseAnonKey: process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
-    environment: process.env['EXPO_PUBLIC_ENVIRONMENT'] ?? 'development',
-    enableDemoData: readBoolean(process.env['EXPO_PUBLIC_ENABLE_DEMO_DATA'], true),
-    analyticsWriteKey: readOptional(process.env['EXPO_PUBLIC_ANALYTICS_WRITE_KEY']),
-    errorMonitoringDsn: readOptional(process.env['EXPO_PUBLIC_ERROR_MONITORING_DSN']),
+    supabaseUrl: readString('EXPO_PUBLIC_SUPABASE_URL'),
+    supabaseAnonKey: readString('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
+    environment: readString('EXPO_PUBLIC_ENVIRONMENT', 'development'),
+    enableDemoData: readBoolean('EXPO_PUBLIC_ENABLE_DEMO_DATA', true),
+    analyticsWriteKey: readOptional('EXPO_PUBLIC_ANALYTICS_WRITE_KEY'),
+    errorMonitoringDsn: readOptional('EXPO_PUBLIC_ERROR_MONITORING_DSN'),
   };
 
   const parsed = environmentSchema.safeParse(candidate);

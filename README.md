@@ -49,10 +49,9 @@ device before they are sent, so the server never sees them in plaintext.
 
 ## Status
 
-**Phase 1 complete.** The foundation is in place: architecture, documentation,
-navigation, database schema with row-level security, and a fictional demonstration
-catalog. Authentication, the rewards engine and the recommendation UI arrive in
-Phases 2-4.
+**Phase 2 complete.** You can register, sign in, and manage a wallet of real cards from
+the catalog — including creating your own. The deterministic rewards engine and the
+recommendation UI arrive in Phases 3-4.
 
 | Phase | Scope                                             | Status         |
 | ----- | ------------------------------------------------- | -------------- |

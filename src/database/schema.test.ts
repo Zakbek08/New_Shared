@@ -95,6 +95,34 @@ describe('migrations', () => {
   });
 });
 
+describe('custom-card issuer migration', () => {
+  it('makes issuer_id nullable, so a member can create a private card', () => {
+    // `issuers` is catalog-only by RLS, so a user-defined product could never
+    // satisfy a NOT NULL foreign key to it.
+    expect(allMigrationSql).toMatch(
+      /alter table public\.card_products\s+alter column issuer_id drop not null/,
+    );
+  });
+
+  it('adds a bounded custom_issuer_name column', () => {
+    expect(allMigrationSql).toMatch(/add column custom_issuer_name text/);
+    expect(allMigrationSql).toMatch(/length\(custom_issuer_name\) between 1 and 80/);
+  });
+
+  it('requires exactly one issuer source, decided by is_user_defined', () => {
+    expect(allMigrationSql).toMatch(/constraint card_products_issuer_source/);
+    // A catalog row must have an issuer_id and no free-text name...
+    expect(allMigrationSql).toMatch(
+      /is_user_defined = false and issuer_id is not null and custom_issuer_name is null/,
+    );
+    // ...and a user-defined row the other way round, so a member's private card
+    // can never inject a row into the shared issuer catalog.
+    expect(allMigrationSql).toMatch(
+      /is_user_defined = true and issuer_id is null and custom_issuer_name is not null/,
+    );
+  });
+});
+
 describe('SECURITY: no payment credentials anywhere in the schema', () => {
   /**
    * Column definitions that must never exist. Matched against the start of a

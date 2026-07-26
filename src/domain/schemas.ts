@@ -117,8 +117,12 @@ export const registrationSchema = z
     password: passwordSchema,
     confirmPassword: z.string(),
     displayName: safeTextSchema(80, 'Your name').optional(),
-    acceptedDisclaimers: z.literal(true, {
-      error: () => 'Please confirm you understand the disclaimers',
+    // `z.boolean().refine(...)` rather than `z.literal(true)`: the literal makes
+    // the form's *input* type `true`, so an unchecked default of `false` would
+    // not typecheck. This keeps the input a plain boolean and still refuses to
+    // pass validation until it is accepted.
+    acceptedDisclaimers: z.boolean().refine((accepted) => accepted, {
+      message: 'Please confirm you understand the disclaimers',
     }),
   })
   .refine((values) => values.password === values.confirmPassword, {
@@ -128,6 +132,16 @@ export const registrationSchema = z
 
 export type SignInInput = z.infer<typeof signInSchema>;
 export type RegistrationInput = z.infer<typeof registrationSchema>;
+
+/**
+ * Form-side (pre-validation) shapes.
+ *
+ * A schema with `.default()` or `z.coerce` has a wider *input* type than output:
+ * `isPreferred` is optional going in and guaranteed coming out. React Hook Form
+ * needs the input type for its field values and the output type for the submit
+ * handler, hence both being exported.
+ */
+export type RegistrationFormValues = z.input<typeof registrationSchema>;
 
 // ---------------------------------------------------------------------------
 // Wallet
@@ -156,6 +170,7 @@ export const addUserCardSchema = z.object({
 });
 
 export type AddUserCardInput = z.infer<typeof addUserCardSchema>;
+export type AddUserCardFormValues = z.input<typeof addUserCardSchema>;
 
 export const customCardProductSchema = z.object({
   name: safeTextSchema(80, 'Card name').pipe(z.string().min(2, 'Enter the card name')),
@@ -171,6 +186,7 @@ export const customCardProductSchema = z.object({
 });
 
 export type CustomCardProductInput = z.infer<typeof customCardProductSchema>;
+export type CustomCardProductFormValues = z.input<typeof customCardProductSchema>;
 
 // ---------------------------------------------------------------------------
 // Purchase intent

@@ -136,7 +136,7 @@ type Timestamps = 'created_at' | 'updated_at';
 // Row types
 // ---------------------------------------------------------------------------
 
-export interface SourceRow {
+export type SourceRow = {
   id: string;
   label: string;
   url: string | null;
@@ -148,9 +148,9 @@ export interface SourceRow {
   is_fictional: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface IssuerRow {
+export type IssuerRow = {
   id: string;
   slug: string;
   name: string;
@@ -160,9 +160,9 @@ export interface IssuerRow {
   is_fictional: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface RewardProgramRow {
+export type RewardProgramRow = {
   id: string;
   slug: string;
   name: string;
@@ -175,12 +175,15 @@ export interface RewardProgramRow {
   is_fictional: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface CardProductRow {
+export type CardProductRow = {
   id: string;
   slug: string;
-  issuer_id: string;
+  /** Set on catalog rows. Always `null` on a user-defined row. */
+  issuer_id: string | null;
+  /** Set on a user-defined row. Always `null` on a catalog row. */
+  custom_issuer_name: string | null;
   reward_program_id: string | null;
   name: string;
   card_kind: CardKind;
@@ -196,9 +199,9 @@ export interface CardProductRow {
   is_active: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface MerchantCategoryRow {
+export type MerchantCategoryRow = {
   id: string;
   slug: string;
   display_name: string;
@@ -210,9 +213,9 @@ export interface MerchantCategoryRow {
   is_active: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface MerchantRow {
+export type MerchantRow = {
   id: string;
   slug: string;
   display_name: string;
@@ -227,9 +230,9 @@ export interface MerchantRow {
   is_fictional: boolean;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface RewardRuleRow {
+export type RewardRuleRow = {
   id: string;
   card_product_id: string;
   reward_program_id: string | null;
@@ -262,9 +265,9 @@ export interface RewardRuleRow {
   notes: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface RewardRuleConditionRow {
+export type RewardRuleConditionRow = {
   id: string;
   reward_rule_id: string;
   merchant_category_id: string | null;
@@ -287,9 +290,9 @@ export interface RewardRuleConditionRow {
   notes: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface VerificationHistoryRow {
+export type VerificationHistoryRow = {
   id: string;
   reward_rule_id: string;
   source_id: string | null;
@@ -301,9 +304,9 @@ export interface VerificationHistoryRow {
   verified_by: string | null;
   note: string | null;
   created_at: IsoTimestamp;
-}
+};
 
-export interface UserRow {
+export type UserRow = {
   id: string;
   email: string | null;
   display_name: string | null;
@@ -316,9 +319,9 @@ export interface UserRow {
   onboarding_completed_at: IsoTimestamp | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface UserCardRow {
+export type UserCardRow = {
   id: string;
   user_id: string;
   card_product_id: string;
@@ -337,9 +340,9 @@ export interface UserCardRow {
   notes: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface UserRewardPreferenceRow {
+export type UserRewardPreferenceRow = {
   id: string;
   user_id: string;
   /** `null` = the user's global default for `unit`. */
@@ -351,9 +354,9 @@ export interface UserRewardPreferenceRow {
   notes: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface UserRuleEnrollmentRow {
+export type UserRuleEnrollmentRow = {
   id: string;
   user_id: string;
   user_card_id: string;
@@ -363,9 +366,9 @@ export interface UserRuleEnrollmentRow {
   expires_at: IsoTimestamp | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface UserOfferRow {
+export type UserOfferRow = {
   id: string;
   user_id: string;
   user_card_id: string;
@@ -389,9 +392,9 @@ export interface UserOfferRow {
   source_id: string | null;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface RewardUsageRow {
+export type RewardUsageRow = {
   id: string;
   user_id: string;
   user_card_id: string;
@@ -406,9 +409,9 @@ export interface RewardUsageRow {
   last_recorded_at: IsoTimestamp;
   created_at: IsoTimestamp;
   updated_at: IsoTimestamp;
-}
+};
 
-export interface PurchaseQueryRow {
+export type PurchaseQueryRow = {
   id: string;
   user_id: string;
   merchant_input: string;
@@ -426,9 +429,9 @@ export interface PurchaseQueryRow {
   has_coding_warning: boolean;
   raw_natural_language_input: string | null;
   created_at: IsoTimestamp;
-}
+};
 
-export interface RecommendationRow {
+export type RecommendationRow = {
   id: string;
   user_id: string;
   purchase_query_id: string;
@@ -448,9 +451,9 @@ export interface RecommendationRow {
   was_accepted: boolean | null;
   accepted_at: IsoTimestamp | null;
   created_at: IsoTimestamp;
-}
+};
 
-export interface RecommendationCandidateRow {
+export type RecommendationCandidateRow = {
   id: string;
   recommendation_id: string;
   user_card_id: string;
@@ -478,9 +481,9 @@ export interface RecommendationCandidateRow {
   verification_status: VerificationStatus | null;
   warnings: string[];
   created_at: IsoTimestamp;
-}
+};
 
-export interface AuditLogRow {
+export type AuditLogRow = {
   id: number;
   actor_id: string | null;
   actor_role: AppRole | null;
@@ -492,7 +495,7 @@ export interface AuditLogRow {
   changed_columns: string[];
   context: Json;
   occurred_at: IsoTimestamp;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Database contract consumed by `createClient<Database>()`
@@ -550,6 +553,8 @@ export interface Database {
         Insertable<
           CardProductRow,
           'id' | Timestamps,
+          | 'issuer_id'
+          | 'custom_issuer_name'
           | 'reward_program_id'
           | 'card_kind'
           | 'network'

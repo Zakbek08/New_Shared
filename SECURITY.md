@@ -54,6 +54,24 @@ one.
 key before the row is written, so the server, the database and every log sink see only
 ciphertext. This is not "encrypted at rest by the provider" — the plaintext never arrives.
 
+Implementation (`src/lib/lastFour.ts`):
+
+| Choice                             | Reason                                                                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AES-256-GCM via `@noble/ciphers`   | Authenticated, so a wrong key or tampered payload fails loudly instead of yielding four plausible digits. Audited, dependency-free, pure TypeScript — identical on Hermes and in Node, so the tests exercise the shipping code path. |
+| Key in `expo-secure-store`         | Platform keystore: Keychain on iOS, Keystore-backed on Android.                                                                                                                                                                      |
+| Fresh 12-byte nonce per encryption | Never reused with the same key. Stored as `nonce ‖ ciphertext ‖ tag`, base64.                                                                                                                                                        |
+| `last_four_key_id` recorded        | Names which device key was used, so keys can rotate and a foreign payload is identifiable rather than silently undecryptable.                                                                                                        |
+
+`expo-crypto` supplies the key and nonce bytes only; it has no symmetric cipher, and React
+Native has no dependable `crypto.subtle`.
+
+**Accepted consequence.** The key lives on one device, so after a reinstall — or on a second
+phone — the stored ciphertext cannot be read. `decryptLastFour` returns `null`, the UI shows
+`••••` and offers to re-enter. That is the honest cost of never letting the server hold the
+plaintext, and it is cheap because the last four digits are a convenience, not data the app
+needs.
+
 ### 4. Secrets live in environment variables
 
 - `.env` is git-ignored; `.env.example` documents every variable with no real values.

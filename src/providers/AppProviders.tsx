@@ -8,6 +8,7 @@ import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AuthProvider } from '@/features/auth/AuthProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 
 /**
@@ -39,10 +40,14 @@ export function AppProviders({ children }: { readonly children: ReactNode }) {
   // test) gets an isolated cache.
   const [queryClient] = useState(createQueryClient);
 
+  // AuthProvider sits *inside* QueryClientProvider because it clears the cache
+  // when the signed-in user changes, which needs `useQueryClient`.
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryClientProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -48,11 +48,11 @@ and `expo-router`. It contains no real credentials.
 
 ---
 
-## Phase 1 coverage — 393 tests, 10 suites
+## Phase 1 coverage — 10 suites
 
 | Suite                                  | Tests | Covers                                                          |
 | -------------------------------------- | ----- | --------------------------------------------------------------- |
-| `src/database/schema.test.ts`          | 114   | Table presence, forbidden columns, RLS coverage, seed integrity |
+| `src/database/schema.test.ts`          | 117   | Table presence, forbidden columns, RLS coverage, seed integrity |
 | `src/theme/contrast.test.ts`           | 71    | WCAG AA on every rendered colour pair, both schemes             |
 | `src/domain/schemas.test.ts`           | 58    | Credential rejection, purchase validation, rule constraints     |
 | `src/domain/rewards/money.test.ts`     | 33    | Rounding, cash back, points, valuations, cap splitting, FX fees |
@@ -112,6 +112,63 @@ body.
 This suite earns its keep. It caught three real failures in the first palette: white on the
 original teal was 4.46:1, the ghost-button label was 4.26:1, and the "strong" border was
 2.11:1. All three now pass with margin.
+
+---
+
+## Phase 2 coverage — 7 further suites
+
+Total after Phase 2: **539 tests across 17 suites.**
+
+| Suite                                      | Tests | Covers                                                                 |
+| ------------------------------------------ | ----- | ---------------------------------------------------------------------- |
+| `src/lib/lastFour.test.ts`                 | 26    | Encryption round-trip, refusal of over-long input, key loss, tampering |
+| `src/features/wallet/api/wallet.test.ts`   | 25    | Wallet mapping, ciphertext-only writes, custom-card rollback           |
+| `src/features/catalog/api/catalog.test.ts` | 20    | Search, filter-injection safety, headline and verification ranking     |
+| `src/features/auth/api/auth.test.ts`       | 20    | Sign-up/in/out, enumeration safety, disclaimer recording               |
+| `src/lib/errors.test.ts`                   | 25    | SQLSTATE and auth-error mapping, retryability, message safety          |
+| `src/components/ui/TextField.test.tsx`     | 16    | Accessible naming, live-region errors, touch targets                   |
+| `src/lib/base64.test.ts`                   | 11    | Reference vectors, URL-safe alphabet, malformed input                  |
+
+### What the Phase 2 security tests assert
+
+`lastFour.test.ts` — the encryption boundary:
+
+- Five digits, thirteen digits and a full 16-digit number are **all refused**, so a PAN
+  cannot be entered one keystroke at a time.
+- The rejection message does not echo the value, in case it _is_ a card number.
+- The stored payload satisfies both database CHECK constraints — it matches the
+  base64 shape and does **not** match the bare-digits guard.
+- The plaintext never appears in the payload, and the same digits encrypt differently each
+  time (fresh nonce).
+- A missing key, a wrong key id, a tampered payload and malformed base64 all yield `null` —
+  never four plausible-looking digits. GCM's authentication tag is what makes tampering
+  detectable rather than silently wrong.
+- A keystore failure returns `null` instead of throwing, so the card still saves.
+
+`wallet.test.ts` — that writes carry ciphertext only:
+
+- The insert payload contains the ciphertext and the key id, and `JSON.stringify` of the
+  whole payload contains the digits nowhere.
+- Both digit columns are null together, matching the DB constraint that requires it.
+- `user_id` comes from the session, never from the caller.
+- No `user_id` filter is sent on reads — RLS is the scope, and duplicating it in the client
+  would let the two drift.
+- A custom card is always `is_user_defined` + `created_by = auth.uid()`, with
+  `is_fictional = false` so it never masquerades as demo data.
+- The rate is stored `user_reported`, so confidence stays honest.
+- When the rule insert fails, the orphan product is deleted — PostgREST has no client
+  transaction, so the rollback has to be explicit or the wallet holds a card earning nothing.
+
+`auth.test.ts` — enumeration safety:
+
+- A wrong password and a non-existent account give the **same** message.
+- A password reset for an unknown address resolves normally; only a rate limit surfaces.
+- The password appears in no database write.
+
+`errors.test.ts` — that raw database text never reaches a user:
+
+- A unique-violation message naming `user_cards_pkey` becomes "That already exists."
+- `forbidden` and `validation` are non-retryable; `network` and `rate_limited` are.
 
 ---
 

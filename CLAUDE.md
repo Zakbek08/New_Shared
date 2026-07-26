@@ -57,6 +57,11 @@ WalletWise must **never** request, store, transmit, log or model:
 The only card digits permitted anywhere are the **optional last four**, encrypted on the
 device before transmission, stored in `user_cards.last_four_cipher`.
 
+Encryption lives in `src/lib/lastFour.ts` and uses **AES-256-GCM from `@noble/ciphers`**,
+with the key in `expo-secure-store`. Do not reach for `expo-crypto` for this — it provides
+randomness and digests but no symmetric cipher — and do not assume `crypto.subtle` exists on
+React Native.
+
 This is enforced in four places, and all four must stay in place:
 
 1. **Schema** — no column can hold a PAN. `user_cards_last_four_not_plaintext` rejects
