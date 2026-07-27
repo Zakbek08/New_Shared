@@ -21,6 +21,8 @@ import type {
 } from '@/types/database';
 
 import { issuerNameOf } from '@/features/catalog/api/catalog';
+import { isDemoMode } from '@/config/env';
+import { demoWalletCards } from '@/features/demo/demoStore';
 
 /** A wallet entry joined to everything the wallet list needs. */
 export interface WalletCard {
@@ -106,6 +108,10 @@ function toWalletCard(row: UserCardWithProduct): WalletCard {
 export async function listUserCards(
   options: { readonly includeArchived?: boolean } = {},
 ): Promise<WalletCard[]> {
+  // Demo mode: the bundled fictional wallet. Nothing is archived in it, so the
+  // includeArchived option has nothing to filter.
+  if (isDemoMode()) return [...demoWalletCards()];
+
   const supabase = getSupabaseClient();
 
   try {

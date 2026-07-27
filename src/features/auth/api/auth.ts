@@ -13,6 +13,8 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { identify, resetAnalyticsIdentity, track } from '@/services/analytics';
 import type { RegistrationInput, SignInInput } from '@/domain/schemas';
 import type { UserRow } from '@/types/database';
+import { isDemoMode } from '@/config/env';
+import { demoProfile } from '@/features/demo/demoStore';
 
 export interface AuthenticatedUser {
   readonly id: string;
@@ -146,6 +148,8 @@ export async function updatePassword(newPassword: string): Promise<void> {
  * caught up, so `null` is returned rather than an error.
  */
 export async function getProfile(): Promise<UserRow | null> {
+  if (isDemoMode()) return demoProfile();
+
   const supabase = getSupabaseClient();
 
   try {

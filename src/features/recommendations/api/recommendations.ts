@@ -11,6 +11,13 @@
 import type { Classification } from '@/domain/classifier/types';
 import type { PurchaseIntentInput } from '@/domain/schemas';
 import type { RecommendationResult } from '@/domain/rewards';
+import { isDemoMode } from '@/config/env';
+import {
+  demoMerchants,
+  demoPersistRecommendation,
+  demoRecentSummaries,
+  demoRecordPurchaseQuery,
+} from '@/features/demo/demoStore';
 import { fromPostgrestError, toDataError, DataError } from '@/lib/errors';
 import { getSupabaseClient } from '@/lib/supabase';
 import { track } from '@/services/analytics';
@@ -45,6 +52,13 @@ function toClassifiableMerchant(row: MerchantRow): ClassifiableMerchant {
 export async function listMerchantsForClassification(
   countryCode: string,
 ): Promise<ClassifiableMerchant[]> {
+  // Demo mode has no backend, so the bundled fictional merchants stand in. The
+  // classifier then runs on them unchanged — this swaps the source of the data,
+  // not the logic applied to it.
+  if (isDemoMode()) {
+    return demoMerchants().filter((merchant) => merchant.countryCode === countryCode);
+  }
+
   const supabase = getSupabaseClient();
 
   try {
@@ -105,7 +119,14 @@ export async function recordPurchaseQuery(options: {
   readonly input: PurchaseIntentInput;
   readonly classification: Classification;
   readonly rawNaturalLanguageInput?: string | null;
-}): Promise<PurchaseQueryRow> {
+  // Narrowed to the id because that is all any caller uses. Returning the whole
+  // row would oblige demo mode to fabricate a dozen unused columns, including a
+  // created_at, which would mean reading a clock for no reason.
+}): Promise<Pick<PurchaseQueryRow, 'id'>> {
+  // Nothing is recorded in demo mode. An id is still issued so the rest of the
+  // pipeline is exercised exactly as it would be against a database.
+  if (isDemoMode()) return demoRecordPurchaseQuery();
+
   const supabase = getSupabaseClient();
   const { input, classification } = options;
 
@@ -168,7 +189,11 @@ export async function recordPurchaseQuery(options: {
 export async function persistRecommendation(
   purchaseQueryId: string,
   result: RecommendationResult,
-): Promise<RecommendationRow> {
+): Promise<Pick<RecommendationRow, 'id'>> {
+  // Held in memory for the life of the page, not written anywhere. Reloading the
+  // demo loses it, which is the truth about where it lives.
+  if (isDemoMode()) return demoPersistRecommendation(purchaseQueryId, result);
+
   const supabase = getSupabaseClient();
 
   try {
@@ -314,6 +339,11 @@ type HistoryRow = {
 
 /** The recently-evaluated list on the home dashboard. */
 export async function listRecentRecommendations(limit = 10): Promise<RecommendationSummary[]> {
+  // The home screen reads this, and the recommendation mutation invalidates it. In
+  // demo mode it must come from memory: a network call here is what left the
+  // mutation's onSuccess awaiting an invalidation that never completed.
+  if (isDemoMode()) return demoRecentSummaries(limit);
+
   const supabase = getSupabaseClient();
 
   try {

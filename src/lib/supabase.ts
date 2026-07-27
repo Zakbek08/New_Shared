@@ -16,6 +16,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { getEnv } from '@/config/env';
+import { DataError } from '@/lib/errors';
 import type { Database } from '@/types/database';
 
 /** SecureStore rejects keys outside this character set. */
@@ -95,6 +96,34 @@ export type WalletWiseClient = SupabaseClient<Database, 'public'>;
 let client: WalletWiseClient | null = null;
 
 /**
+ * A client that refuses every operation, for demo mode.
+ *
+ * A Proxy rather than a hand-written stub: it covers the whole surface, including
+ * parts of the API this app does not use yet, so a new call site cannot slip
+ * through unnoticed.
+ */
+function demoRefusingClient(): WalletWiseClient {
+  const refuse = (property: string): never => {
+    throw new DataError(
+      // `forbidden` rather than `network`: nothing is wrong with the connection,
+      // this build simply has no account behind it. `isRetryable` is false for
+      // this kind, so the UI will not invite a pointless retry.
+      'forbidden',
+      'That part of WalletWise needs an account, and this is the demonstration build. ' +
+        'The wallet, the purchase assistant and the recommendation all work here.',
+      `demo:supabase.${property}`,
+    );
+  };
+
+  return new Proxy(
+    {},
+    {
+      get: (_target, property) => refuse(String(property)),
+    },
+  ) as WalletWiseClient;
+}
+
+/**
  * The shared client. Created lazily so that importing this module does not force
  * environment validation at bundle time.
  */
@@ -102,6 +131,23 @@ export function getSupabaseClient(): WalletWiseClient {
   if (client !== null) return client;
 
   const env = getEnv();
+
+  // Demo mode has no project to talk to. Every screen the demo covers reads from
+  // `src/features/demo/`, so reaching here means a path was not covered — and the
+  // right outcome is a loud, immediate refusal rather than a request to a
+  // placeholder host.
+  //
+  // WHY THIS MATTERS MORE THAN IT LOOKS
+  // Without it, an uncovered call goes to a hostname that does not resolve. The
+  // request neither succeeds nor fails promptly, so the promise never settles; a
+  // mutation whose onSuccess awaits `invalidateQueries` then hangs on a spinner
+  // for ever, with no error anywhere. That is exactly what happened, and it took
+  // a stage-by-stage trace to find. Failing fast turns a silent hang into a
+  // visible message naming the operation.
+  if (env.demoMode) {
+    client = demoRefusingClient();
+    return client;
+  }
 
   client = createClient<Database, 'public'>(env.supabaseUrl, env.supabaseAnonKey, {
     auth: {

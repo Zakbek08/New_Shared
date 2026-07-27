@@ -23,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { getEnv, isDemoDataEnabled, isProduction, resetEnvCache } from './env';
+import { getEnv, isDemoDataEnabled, isDemoMode, isProduction, resetEnvCache } from './env';
 
 const VALID_KEY = 'a'.repeat(40);
 
@@ -35,6 +35,7 @@ const KEYS = [
   'EXPO_PUBLIC_ENABLE_DEMO_DATA',
   'EXPO_PUBLIC_ANALYTICS_WRITE_KEY',
   'EXPO_PUBLIC_ERROR_MONITORING_DSN',
+  'EXPO_PUBLIC_DEMO_MODE',
 ] as const;
 
 const originals: Record<string, string | undefined> = {};
@@ -176,6 +177,40 @@ describe('booleans', () => {
     delete process.env['EXPO_PUBLIC_ENABLE_DEMO_DATA'];
     resetEnvCache();
     expect(isDemoDataEnabled()).toBe(true);
+  });
+});
+
+describe('demo mode', () => {
+  it('is off unless asked for', () => {
+    // Forgetting the variable must produce the real app, never the fictional one.
+    delete process.env['EXPO_PUBLIC_DEMO_MODE'];
+    resetEnvCache();
+    expect(getEnv().demoMode).toBe(false);
+    expect(isDemoMode()).toBe(false);
+  });
+
+  it('can be switched on outside production', () => {
+    process.env['EXPO_PUBLIC_DEMO_MODE'] = 'true';
+    process.env['EXPO_PUBLIC_ENVIRONMENT'] = 'development';
+    resetEnvCache();
+    expect(isDemoMode()).toBe(true);
+  });
+
+  it('is refused in a production build', () => {
+    // Demo mode serves an invented wallet with no backend. In production that
+    // would mean showing fictional cards to a real user, so it fails the build
+    // rather than warning. Refusing beats trusting a deployment checklist.
+    process.env['EXPO_PUBLIC_DEMO_MODE'] = 'true';
+    process.env['EXPO_PUBLIC_ENVIRONMENT'] = 'production';
+    resetEnvCache();
+    expect(() => getEnv()).toThrow(/must not be enabled in a production build/);
+  });
+
+  it('leaves production alone when it is off', () => {
+    process.env['EXPO_PUBLIC_ENVIRONMENT'] = 'production';
+    resetEnvCache();
+    expect(() => getEnv()).not.toThrow();
+    expect(isDemoMode()).toBe(false);
   });
 });
 

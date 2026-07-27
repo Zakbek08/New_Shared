@@ -20,6 +20,8 @@ import { fromPostgrestError, toDataError } from '@/lib/errors';
 import { parseInt4Ranges } from '@/lib/int4range';
 import { formatCardName } from '@/lib/format';
 import { getSupabaseClient } from '@/lib/supabase';
+import { isDemoMode } from '@/config/env';
+import { demoWalletSnapshot } from '@/features/demo/demoStore';
 import type {
   CardProductRow,
   IssuerRow,
@@ -285,6 +287,10 @@ export interface WalletSnapshot {
  * user wondering where a card went.
  */
 export async function loadWalletSnapshot(): Promise<WalletSnapshot> {
+  // Demo mode supplies the bundled fictional wallet. `evaluateWallet` receives the
+  // same shape it would from Postgres and computes every figure itself.
+  if (isDemoMode()) return demoWalletSnapshot();
+
   const supabase = getSupabaseClient();
 
   try {

@@ -20,6 +20,7 @@ const environmentSchema = z.object({
   supabaseAnonKey: z.string().min(20, 'EXPO_PUBLIC_SUPABASE_ANON_KEY looks wrong'),
   environment: z.enum(['development', 'staging', 'production', 'test']),
   enableDemoData: z.boolean(),
+  demoMode: z.boolean(),
   analyticsWriteKey: z.string().nullable(),
   errorMonitoringDsn: z.string().nullable(),
 });
@@ -55,6 +56,7 @@ function readRawEnvironment(): Readonly<Record<string, string | undefined>> {
     EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
     EXPO_PUBLIC_ENABLE_DEMO_DATA: process.env.EXPO_PUBLIC_ENABLE_DEMO_DATA,
+    EXPO_PUBLIC_DEMO_MODE: process.env.EXPO_PUBLIC_DEMO_MODE,
     EXPO_PUBLIC_ANALYTICS_WRITE_KEY: process.env.EXPO_PUBLIC_ANALYTICS_WRITE_KEY,
     EXPO_PUBLIC_ERROR_MONITORING_DSN: process.env.EXPO_PUBLIC_ERROR_MONITORING_DSN,
   };
@@ -89,9 +91,23 @@ function loadEnvironment(): Environment {
     supabaseAnonKey: readString(raw['EXPO_PUBLIC_SUPABASE_ANON_KEY']),
     environment: readString(raw['EXPO_PUBLIC_ENVIRONMENT'], 'development'),
     enableDemoData: readBoolean(raw['EXPO_PUBLIC_ENABLE_DEMO_DATA'], true),
+    // Defaults to OFF. A demo build has to ask for it explicitly; forgetting the
+    // variable can only ever produce the real app, never the fictional one.
+    demoMode: readBoolean(raw['EXPO_PUBLIC_DEMO_MODE'], false),
     analyticsWriteKey: readOptional(raw['EXPO_PUBLIC_ANALYTICS_WRITE_KEY']),
     errorMonitoringDsn: readOptional(raw['EXPO_PUBLIC_ERROR_MONITORING_DSN']),
   };
+
+  // Demo mode replaces the backend with a bundled fictional wallet. In a
+  // production build that would mean showing invented cards to a real user, so it
+  // is refused rather than warned about. The check lives here, at the only place
+  // configuration is read, so there is no way around it.
+  if (candidate.demoMode && candidate.environment === 'production') {
+    throw new Error(
+      'EXPO_PUBLIC_DEMO_MODE must not be enabled in a production build. ' +
+        'Demo mode serves a fictional wallet with no backend.',
+    );
+  }
 
   const parsed = environmentSchema.safeParse(candidate);
   if (!parsed.success) {
@@ -126,3 +142,23 @@ export const isProduction = (): boolean => getEnv().environment === 'production'
  * demonstration-data banner, because the rates on screen are invented.
  */
 export const isDemoDataEnabled = (): boolean => getEnv().enableDemoData;
+
+/**
+ * Whether the app is running as a self-contained demonstration.
+ *
+ * When true there is no backend and no sign-in: the wallet, the card catalog and
+ * the merchant list all come from a bundled fictional snapshot
+ * (`src/features/demo/`), and nothing is written anywhere. It exists so the app
+ * can be shown to someone without asking them to create an account.
+ *
+ * WHAT THIS DOES NOT CHANGE, AND MUST NEVER CHANGE
+ * The reward figures are still produced by the deterministic engine in
+ * `src/domain/rewards/` from validated rule records. Demo mode swaps the *source*
+ * of those records, not the arithmetic. No number shown to a user is invented by
+ * the demo layer, because a plausible fake figure in a financial app is worse
+ * than an obvious gap — see CLAUDE.md.
+ *
+ * It is refused outright in production (see `loadEnvironment`), so it cannot be
+ * switched on by accident in a real build.
+ */
+export const isDemoMode = (): boolean => getEnv().demoMode;

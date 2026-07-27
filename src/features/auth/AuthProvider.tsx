@@ -18,6 +18,8 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import type { Session } from '@supabase/supabase-js';
 
+import { isDemoMode } from '@/config/env';
+import { demoSession } from '@/features/demo/demoStore';
 import { getSupabaseClient } from '@/lib/supabase';
 import { captureException } from '@/services/analytics';
 
@@ -53,6 +55,18 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let currentUserId: string | null = null;
+
+    // Demo mode has no Supabase project to ask, so it stands in a fixed local
+    // session and never touches the network. Deliberately the *only* place the app
+    // is signed in without a real token, and it cannot happen in a production
+    // build: `getEnv()` refuses EXPO_PUBLIC_DEMO_MODE there outright.
+    if (isDemoMode()) {
+      setSession(demoSession());
+      setIsInitialising(false);
+      return () => {
+        isMounted = false;
+      };
+    }
 
     const supabase = getSupabaseClient();
 

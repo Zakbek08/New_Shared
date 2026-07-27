@@ -38,6 +38,11 @@ declare namespace NodeJS {
     EXPO_PUBLIC_ENVIRONMENT?: string;
     /** Enables the fictional demo catalog and the on-screen DEMO DATA banner. */
     EXPO_PUBLIC_ENABLE_DEMO_DATA?: string;
+    /**
+     * Runs the app entirely against a bundled fictional wallet, with no backend
+     * and no sign-in. For the published preview only — see isDemoMode().
+     */
+    EXPO_PUBLIC_DEMO_MODE?: string;
     EXPO_PUBLIC_ANALYTICS_WRITE_KEY?: string;
     EXPO_PUBLIC_ERROR_MONITORING_DSN?: string;
   }
