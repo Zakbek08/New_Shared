@@ -1,71 +1,93 @@
-# Looking at WalletWise
+# Running WalletWise
 
-No installation and no commands. There is **one setting to switch on, once** — it
-cannot be automated, because turning on web hosting for a repository needs a
-permission that automation is not given. Three clicks, then it is done forever.
+There are two ways to open it. The first needs nothing installed.
 
-## Step 1 — switch on hosting (once)
+---
 
-1. Open **https://github.com/Zakbek08/New_Shared/settings/pages**
-2. Under **Source**, choose **GitHub Actions**
-3. That is all — there is no Save button
-
-## Step 2 — the link
+## 1. The published link — nothing to install, nothing to start
 
 **https://zakbek08.github.io/New_Shared/**
 
-Open it on a phone or a laptop. On a phone it will look like the real app, because
-that is the same code the app itself runs.
+Open it on a phone or a laptop. On a phone it looks and behaves like the real app,
+because it is the same code.
 
-It is republished automatically every time the code on `main` changes, so the
-address stays current and does not need to be regenerated.
+There is nothing to start and nothing to keep running. It is static hosting, so the
+link works whether or not anyone is at a computer, and it is republished
+automatically every time the code on `main` changes.
 
-It goes live a minute or two after step 1. If the link says "404 there isn't a
-GitHub Pages site here", step 1 has not taken effect yet, or the publish is still
-running.
+If you have had the page open before, force a refresh so you get the current build:
+**Ctrl+Shift+R**, or **Cmd+Shift+R** on a Mac.
 
-## What you can do right now
+### What works
 
-You will land on the welcome screen. From there:
+All of it. The published build runs against a **bundled fictional wallet**, so the
+whole flow works with no account and no database:
 
-- **Read the two safety notices.** They are on the first screen on purpose. One says
-  WalletWise never moves money or connects to a bank. The other says it never asks
-  for a card number, security code, PIN or banking password.
-- **Tap "Create an account"** or **"I already have an account"** to see the sign-up
-  and sign-in screens, and the wording of the disclaimers you would be agreeing to.
+| Do this                                      | Where                                          |
+| -------------------------------------------- | ---------------------------------------------- |
+| See five demonstration cards                 | **Wallet** tab                                 |
+| Read the earn rates and cap progress         | Tap any card                                   |
+| See where each rate came from                | Same screen, scroll down                       |
+| Ask which card to use                        | **Purchase** tab → type a merchant and amount  |
+| See the winner, runner-up and every reject   | The results screen, with a reason on each card |
+| Follow the arithmetic row by row             | "How we worked this out"                       |
+| See the document and its full change history | Bottom of that screen                          |
 
-## What does not work yet, and why
+Two things worth trying, because they show the engine is really calculating rather
+than reciting a headline rate:
 
-**You cannot create an account or sign in.** Everything past that point — adding
-cards, asking which card to use, seeing a recommendation — needs a database, and
-there is not one connected to this preview.
+- Enter **Greenleaf** for **100** — the 6% grocery card wins with **$6.00**.
+- Change the amount to **5000** — the winner **changes** to the flat 2% card at
+  **$100.00**, because the grocery card's yearly cap runs out partway through.
 
-That is not a bug. WalletWise keeps each person's wallet private using database
-rules, so there is nothing to look at until there is a real database with a real
-account in it. Wiring one up takes a few minutes and is free; ask and it can be
-done, after which this same link works fully.
+### Everything in it is invented
 
-The alternative would be a preview stuffed with invented card names and made-up
-reward rates. For an app whose entire purpose is telling you the truth about money,
-a convincing fake is worse than an honest gap.
+Every issuer, card and rate is fictional and labelled `DEMO —`. The app says so on
+the first screen and again on every card. It describes no real financial product, and
+no purchase decision should be made on it.
 
-## Is anything here sensitive?
+Signing in, syncing and saving are the parts that genuinely need a database. Those
+screens exist and work; they just have nothing to connect to from this link. Wiring up
+a real (free) database takes a few minutes — ask, and this same link works fully.
 
-No.
+---
 
-- The repository is public. It contains no passwords or keys — the history has been
-  scanned for them.
-- Every card, bank and reward rate in the demonstration data is **invented**. None
-  of it describes a real financial product.
-- WalletWise cannot take a payment or reach a bank. It has no code that could.
+## 2. On your own machine — if you want to change the code
 
-## If the page looks broken
+You need [Node.js](https://nodejs.org) 20 or newer. Then:
 
-Two things to try, in order:
+```bash
+git clone https://github.com/Zakbek08/New_Shared.git
+cd New_Shared
+npm install
+npm run preview:web
+```
 
-1. **Refresh.** A publish takes a minute or two, and a browser can hold on to the
-   old version.
-2. **Check the address ends with a slash:** `.../New_Shared/`
+It prints a `http://localhost:8081` address — open that in a browser. Edit a file and
+the page reloads by itself.
 
-If it is still wrong, the publishing log is under the repository's **Actions** tab,
-in the run named **pages** — the failure will be named there rather than silent.
+`npm run preview:web` is the demonstration wallet, same as the published link, so it
+needs no database. To run against a real Supabase project instead, put its URL and
+anon key in a `.env` file and use `npm start`.
+
+### If `npm start` fails to launch
+
+On a restricted or offline network, `expo start` can fail before it opens with
+`SyntaxError: Unexpected token 'H', "Host not i"...`. That is the Expo CLI failing to
+reach Expo's servers for a routine dependency check, not a problem with the app. Add
+`--offline`, which skips that check:
+
+```bash
+npx expo start --web --offline
+```
+
+`npm run preview:web` already passes it.
+
+---
+
+## Running it as a real phone app
+
+Both routes above run WalletWise in a browser. To install it on a phone as an actual
+app, you need an Apple Developer account (£79/$99 a year) or a Google Play account
+($25 once), plus an Expo build. That is a paid, account-bound step — the code is ready
+for it, but it cannot be done from here.

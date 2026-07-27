@@ -205,6 +205,49 @@ if (/process\.env\s*\[/.test(bundle)) {
   );
 }
 
+/**
+ * No test code in a shipped bundle.
+ *
+ * Expo Router builds its route table from `require.context(app/)` over every `.tsx`
+ * file, with no exclusion for test files. The three screen tests colocated beside their
+ * screens were therefore registered as routes and bundled, dragging
+ * `@testing-library/react-native` and `react-test-renderer` in behind them — 342 KB of
+ * assertion library in the app a user downloads, and a dev server that refused to boot
+ * because `react-test-renderer` is not a dependency of this app.
+ *
+ * `metro.config.js` now blocks `*.test.*`. This asserts the outcome rather than the
+ * configuration, for the same reason the value checks above do: the config could be
+ * correct and the mechanism still break, and only the artefact settles it.
+ *
+ * Both markers were confirmed against a deliberately broken build before being trusted —
+ * the same negative control the rest of this repo's guards get. A third candidate,
+ * `@testing-library/react-native`, was dropped after that control: the module *name* does
+ * not survive bundling even when its code does, so it reported clean on a bundle that was
+ * demonstrably contaminated. A tick with nothing behind it is worse than no check, which
+ * is the same reasoning as MEANINGFUL_LENGTH above.
+ *
+ * `toBeTruthy` is the load-bearing one, because it is the assertion surface rather than a
+ * package name: nothing in this app calls it, so its presence means a test file is in here.
+ */
+const FORBIDDEN_IN_BUNDLE = [
+  ['react-test-renderer', 'the React test renderer'],
+  ['toBeTruthy', 'a Jest matcher'],
+];
+
+for (const [marker, description] of FORBIDDEN_IN_BUNDLE) {
+  if (bundle.includes(marker)) {
+    failures += 1;
+    process.stderr.write(
+      `  ${RED}✕ The bundle contains ${JSON.stringify(marker)} — ${description}.${RESET}\n` +
+        `      A test file has been pulled into the app bundle. The usual cause is a\n` +
+        `      *.test.tsx file under app/, which Expo Router turns into a route.\n` +
+        `      Check the blockList in metro.config.js still covers it.\n`,
+    );
+  } else {
+    process.stdout.write(`  ${GREEN}✓${RESET} bundle is free of ${description}\n`);
+  }
+}
+
 if (failures > 0) {
   process.stderr.write(`\n${RED}${failures} bundle check(s) failed.${RESET}\n`);
   process.exit(1);
