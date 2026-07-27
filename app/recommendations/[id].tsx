@@ -16,7 +16,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DisclaimerNotice } from '@/components/Disclaimers';
-import { PlaceholderSection } from '@/components/PlaceholderSection';
 import { EmptyState } from '@/components/StateViews';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -34,6 +33,7 @@ import {
   otherRulesOnCard,
 } from '@/features/recommendations/ruleFacts';
 import { BreakdownTable } from '@/features/recommendations/ui/BreakdownTable';
+import { RuleHistorySection } from '@/features/provenance/ui/RuleHistorySection';
 import { formatRewardRate, formatUsd, formatVerifiedOn } from '@/lib/format';
 
 /** The order the engine applies its steps in. Documented in REWARDS_ENGINE.md. */
@@ -270,10 +270,12 @@ export default function RecommendationDetailsScreen() {
           </VStack>
         </Card>
 
-        <PlaceholderSection
-          phase="Phase 6"
-          title="Source document and change history"
-          description="The source document behind the rate, who last verified it, and the full history of changes to the rule."
+        {/* The rate the arithmetic above used, and where it came from. `rewardType`
+            comes off the breakdown rather than the rule, so a history entry is
+            formatted as the same kind of reward the engine actually paid out. */}
+        <RuleHistorySection
+          ruleId={breakdown.appliedRuleId}
+          rewardType={breakdown.rewardType}
           testID="details-source"
         />
 

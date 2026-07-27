@@ -21,6 +21,7 @@ import type {
   RewardType,
   RewardUnit,
   RuleKind,
+  SourceDocumentType,
   VerificationStatus,
 } from '@/types/database';
 
@@ -226,4 +227,22 @@ export const CAP_PERIOD_LABELS: Record<CapPeriod, string> = {
   cardmember_year: 'per cardmember year',
   lifetime: 'lifetime',
   promotional_window: 'during the promotion',
+};
+
+/**
+ * What kind of document a rate was read out of.
+ *
+ * Ordered in the copy from strongest evidence to weakest, and phrased so the
+ * difference matters to the reader: an issuer's own terms bind the issuer, its
+ * marketing page does not, and a figure someone typed in binds nobody. The UI
+ * shows this beside every rate so "verified" cannot be read as "verified against
+ * something authoritative" when it was not.
+ */
+export const SOURCE_DOCUMENT_TYPE_LABELS: Record<SourceDocumentType, string> = {
+  issuer_terms: 'Issuer’s own terms',
+  issuer_marketing: 'Issuer marketing page',
+  network_documentation: 'Card network documentation',
+  user_submission: 'Typed in by a cardholder',
+  fictional_demo_data: 'Invented demonstration data',
+  other: 'Other document',
 };

@@ -614,6 +614,68 @@ work.
 
 ---
 
+## Phase 8 coverage — 6 further suites
+
+Total: **2,028 tests across 73 suites**, no skips. Counts are from `jest --json`.
+
+| Suite                                                    | What it pins                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/features/provenance/describe.test.ts`               | The exact wording of every caveat, and exhaustiveness over the enum |
+| `src/features/provenance/api/provenance.test.ts`         | What is sent, and that history lands on the right rule              |
+| `src/features/provenance/ui/SourceSection.test.tsx`      | Derived staleness, shared-document dedup, weakest-wins              |
+| `src/features/provenance/ui/RuleHistorySection.test.tsx` | Failure ≠ empty history; the rate on file that day                  |
+| `src/features/demo/demoRouting.test.ts`                  | In demo mode nothing reaches Supabase — with a negative control     |
+| `src/features/demo/demoProvenance.test.ts`               | No fabricated citation; history rates derived from the rules        |
+| `src/features/demo/demoStore.test.ts`                    | The demo card product summarises exactly as the database path does  |
+| `src/domain/catalog/summary.test.ts`                     | Best-bonus headline, and that the weakest verification wins         |
+
+### The wording is the feature, so the wording is pinned
+
+`describe.test.ts` asserts whole sentences, which normally reads as brittle. Here it is the
+point. The provenance screens exist so a user can decide how much to trust a figure, and that
+judgement is carried entirely by the words: "Issuer's own terms" versus "Typed in by a
+cardholder" is the difference between a number you would act on and one you would not.
+Softening the copy would break the feature while leaving every render test green.
+
+The caveat test also runs over every `SourceDocumentType`, so a new document type cannot slip
+through with no warning attached. The `switch` has no `default`, so that is a second line of
+defence behind a typecheck failure.
+
+### A fabricated citation is worse than a fabricated number
+
+`demoProvenance.test.ts` asserts the demo source carries **no URL**. A plausible-looking
+`https://northwind-financial.example/terms` would be the same class of defect as an invented
+rate, and worse in kind: a made-up number invites doubt, a made-up citation invites trust. The
+same test compares the demo source's label against `supabase/seed/02`, so the bundled preview
+and the seeded database cite the same document rather than two that drift apart.
+
+It also checks that every rate in the demo's change history is read back out of `DEMO_CARDS`
+rather than typed again. A history entry claiming 6% after someone changed the rule to 5% would
+make the audit trail lie about the arithmetic it exists to corroborate.
+
+### Demo mode is tested with a negative control
+
+`demoRouting.test.ts` replaces `getSupabaseClient` with a function that throws, then exercises
+every read the published preview makes. That matters because the preview points at a
+placeholder host that resolves to nothing: a read that slipped past its demo branch would not
+fail fast, it would hang until the request timed out and leave the screen on a spinner — the
+exact failure mode that hid a broken submit button once already.
+
+The last three tests in the file delete `EXPO_PUBLIC_DEMO_MODE` and assert the same reads _do_
+reach for the client. Without them, every test above would still pass if `isDemoMode()` were
+hard-wired to `true`, and the guard would be worthless.
+
+### A browser pass over the built bundle
+
+Unit tests stub the provenance query, so they cannot answer the only question that matters:
+does a person opening the published link see a citation? A Playwright pass over the exported
+bundle loads the card detail and the recommendation workings and asserts the document label,
+the derived freshness, the "no public link" line and the two history entries are all on the
+page, with no uncaught errors. It found two real gaps — card details and card products had no
+demo branch at all, so both screens would have hung in the preview.
+
+---
+
 ## Continuous integration
 
 `.github/workflows/verify.yml`. Four jobs, deliberately separate so a failure names

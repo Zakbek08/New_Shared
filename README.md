@@ -49,6 +49,13 @@ device before they are sent, so the server never sees them in plaintext.
 
 ## Status
 
+**Complete.** Every screen region is built — no placeholders remain anywhere in the app.
+The last two were the provenance regions: a card now shows the document behind each of its
+rates, and a recommendation shows that document plus every change recorded against the rule,
+with the rate that was on file on each date. Freshness is derived from how long ago a rate
+was checked rather than stored, so a rate verified six months ago reads as out of date even
+where the catalog still calls it verified.
+
 **Phase 6 complete.** The catalog every recommendation reads from is now curated in the
 app: a rule editor, a condition builder down to inclusive MCC ranges, a verification
 workflow with an append-only history, a review queue ordered by how stale each rate is, and

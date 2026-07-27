@@ -6,6 +6,13 @@
  * custom rows, so adding a filter here would duplicate the rule in a place where
  * it could drift from the database.
  */
+import { isDemoMode } from '@/config/env';
+import {
+  headlineRuleLabel,
+  weakestVerification,
+  type RuleSummaryFields,
+} from '@/domain/catalog/summary';
+import { demoCardProduct } from '@/features/demo/demoStore';
 import { fromPostgrestError, toDataError } from '@/lib/errors';
 import { getSupabaseClient } from '@/lib/supabase';
 import type {
@@ -31,20 +38,6 @@ export interface CardProductSummary {
   readonly verificationStatus: VerificationStatus | null;
   readonly lastVerifiedAt: string | null;
 }
-
-/** The rule fields the list view needs. The detail query returns supersets of this. */
-type RuleSummaryFields = Pick<
-  RewardRuleRow,
-  | 'id'
-  | 'label'
-  | 'kind'
-  | 'reward_type'
-  | 'base_rate'
-  | 'bonus_rate'
-  | 'is_active'
-  | 'verification_status'
-  | 'last_verified_at'
->;
 
 /**
  * Anything the summary mapper can read.
@@ -76,63 +69,11 @@ const PRODUCT_SELECT = `
                  verification_status, last_verified_at )
 `;
 
-/** Ordered weakest-first, so `Math.min` over indices gives the honest status. */
-const STATUS_RANK: Record<VerificationStatus, number> = {
-  disputed: 0,
-  unverified: 1,
-  stale: 2,
-  user_reported: 3,
-  retired: 4,
-  verified: 5,
-};
-
 export function issuerNameOf(product: {
   issuers?: { name: string } | null;
   custom_issuer_name?: string | null;
 }): string {
   return product.issuers?.name ?? product.custom_issuer_name ?? 'Unknown issuer';
-}
-
-/**
- * The single most useful rate on a card, for a one-line summary.
- *
- * Picks the highest-earning non-base rule, falling back to the base rule. This
- * is a *display* heuristic over stored numbers, not a reward calculation — the
- * engine never consults it.
- */
-function headlineFor(rules: readonly RuleSummaryFields[]): string | null {
-  const active = rules.filter((rule) => rule.is_active);
-  if (active.length === 0) return null;
-
-  const ranked = [...active].sort((a, b) => {
-    const aRate = a.base_rate + a.bonus_rate;
-    const bRate = b.base_rate + b.bonus_rate;
-    if (aRate !== bRate) return bRate - aRate;
-    // Prefer a bonus over the base rule when the numbers tie.
-    return (a.kind === 'base' ? 1 : 0) - (b.kind === 'base' ? 1 : 0);
-  });
-
-  return ranked[0]?.label ?? null;
-}
-
-function weakestVerification(rules: readonly RuleSummaryFields[]): {
-  status: VerificationStatus | null;
-  lastVerifiedAt: string | null;
-} {
-  const active = rules.filter((rule) => rule.is_active);
-  if (active.length === 0) return { status: null, lastVerifiedAt: null };
-
-  let weakest = active[0]!;
-  for (const rule of active) {
-    if (STATUS_RANK[rule.verification_status] < STATUS_RANK[weakest.verification_status]) {
-      weakest = rule;
-    }
-  }
-
-  return {
-    status: weakest.verification_status,
-    lastVerifiedAt: weakest.last_verified_at,
-  };
 }
 
 function toSummary(product: SummarisableProduct): CardProductSummary {
@@ -146,7 +87,7 @@ function toSummary(product: SummarisableProduct): CardProductSummary {
     foreignTransactionFeePercent: product.foreign_transaction_fee_percent,
     isFictional: product.is_fictional,
     isUserDefined: product.is_user_defined,
-    headline: headlineFor(product.reward_rules),
+    headline: headlineRuleLabel(product.reward_rules),
     verificationStatus: verification.status,
     lastVerifiedAt: verification.lastVerifiedAt,
   };
@@ -207,6 +148,8 @@ export interface CardProductDetail extends CardProductSummary {
 }
 
 export async function getCardProduct(id: string): Promise<CardProductDetail> {
+  if (isDemoMode()) return demoCardProduct(id);
+
   const supabase = getSupabaseClient();
 
   try {

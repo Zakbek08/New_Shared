@@ -40,6 +40,15 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 
+// The provenance section fetches, so it needs auth and a query. Stubbed here because
+// this suite is about the arithmetic and its attribution; the section has its own
+// tests in `src/features/provenance/ui/RuleHistorySection.test.tsx`. The stub is
+// deliberately *pending* — the screen must render its whole audit trail while the
+// source is still loading, not hold the figures back until it arrives.
+jest.mock('@/features/provenance/hooks', () => ({
+  useRuleProvenance: () => ({ isPending: true, isError: false, refetch: jest.fn() }),
+}));
+
 function classification(overrides: Partial<Classification> = {}): Classification {
   return {
     merchantId: intent().merchantId,

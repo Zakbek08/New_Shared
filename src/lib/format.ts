@@ -85,6 +85,29 @@ export function formatCapRemaining(remainingUsd: number, capAmountUsd: number): 
   return `${formatUsdCompact(remainingUsd)} of ${formatUsdCompact(capAmountUsd)} left`;
 }
 
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  // UTC deliberately. A `date` column arrives as `"2026-07-01"`, which parses to
+  // UTC midnight; formatting it in the device's zone would show 30 June to anyone
+  // west of Greenwich and make a published-on date look a day early.
+  timeZone: 'UTC',
+});
+
+/**
+ * A calendar day, phrased for a person: `"25 July 2026"`.
+ *
+ * Returns `null` rather than a placeholder when there is no usable date, so the
+ * caller decides whether to omit the line or say something about the absence.
+ */
+export function formatDay(date: Date | string | null): string | null {
+  if (date === null) return null;
+  const parsed = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(parsed.getTime())) return null;
+  return dayFormatter.format(parsed);
+}
+
 /**
  * A verification date, phrased for a person: `"Verified 25 July 2026"`.
  * Returns a plain statement of ignorance when there is no date, rather than

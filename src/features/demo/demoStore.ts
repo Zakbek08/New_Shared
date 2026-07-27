@@ -1,5 +1,5 @@
 /**
- * In-memory stand-ins for the four database calls the recommendation flow makes.
+ * In-memory stand-ins for the database calls the app makes.
  *
  * Demo mode has no backend, so a purchase question and its recommendation are held
  * for the life of the page instead of being written anywhere. Reloading loses them,
@@ -16,13 +16,17 @@
  * so a test can assert them.
  */
 import { DEMO_CARDS, DEMO_MERCHANTS } from '@/features/demo/demoCatalog';
+import { DEMO_SOURCE } from '@/features/demo/demoProvenance';
 import type { WalletSnapshot } from '@/features/recommendations/api/snapshot';
 import type { ClassifiableMerchant } from '@/domain/classifier/types';
-import type { RecommendationResult } from '@/domain/rewards/types';
+import type { EvaluableRule, RecommendationResult } from '@/domain/rewards/types';
+import { headlineRuleLabel, weakestVerification } from '@/domain/catalog/summary';
 import type { Session } from '@supabase/supabase-js';
 import type { WalletCard } from '@/features/wallet/api/wallet';
+import type { CardProductDetail } from '@/features/catalog/api/catalog';
 import type { RecommendationSummary } from '@/features/recommendations/api/recommendations';
-import type { UserRow } from '@/types/database';
+import type { RewardRuleRow, UserRow } from '@/types/database';
+import { DataError } from '@/lib/errors';
 import { DISCLAIMER_VERSION } from '@/components/Disclaimers';
 
 /**
@@ -172,6 +176,96 @@ export function demoWalletCards(): readonly WalletCard[] {
       card.rules.find((entry) => entry.kind !== 'base')?.label ?? card.rules[0]?.label ?? null,
     verificationStatus: 'verified',
   }));
+}
+
+/**
+ * A demo rule expressed as the database row shape.
+ *
+ * The card-details screen reads rules as rows, so the demo has to hand it rows. This
+ * is a *shape* conversion and nothing more: every field is copied straight across,
+ * with no figure derived, defaulted to something plausible, or rounded. The timestamps
+ * are the rule's own explicit verification date rather than a clock reading.
+ */
+const DEMO_ROW_TIMESTAMP = '2026-07-01T00:00:00.000Z';
+
+function toRewardRuleRow(rule: EvaluableRule): RewardRuleRow {
+  return {
+    id: rule.id,
+    card_product_id: rule.cardProductId,
+    reward_program_id: rule.rewardProgramId,
+    label: rule.label,
+    kind: rule.kind,
+    reward_type: rule.rewardType,
+    reward_unit: rule.rewardUnit,
+    base_rate: rule.baseRate,
+    bonus_rate: rule.bonusRate,
+    fixed_amount_usd: rule.fixedAmountUsd,
+    priority: rule.priority,
+    stack_group: rule.stackGroup,
+    is_stackable: rule.isStackable,
+    cap_amount: rule.capAmount,
+    cap_applies_to: rule.capAppliesTo,
+    cap_period: rule.capPeriod,
+    post_cap_rate: rule.postCapRate,
+    starts_at: rule.startsAt?.toISOString() ?? null,
+    ends_at: rule.endsAt?.toISOString() ?? null,
+    requires_enrollment: rule.requiresEnrollment,
+    // Null, not a plausible-looking link: a fabricated enrollment URL would send a
+    // user to a page that does not exist. See demoProvenance.ts.
+    enrollment_url: null,
+    enrollment_notes: null,
+    spend_threshold_usd: rule.spendThresholdUsd,
+    source_id: DEMO_SOURCE.id,
+    last_verified_at: rule.lastVerifiedAt?.toISOString() ?? null,
+    verification_status: rule.verificationStatus,
+    is_active: rule.isActive,
+    notes: null,
+    created_at: DEMO_ROW_TIMESTAMP,
+    updated_at: DEMO_ROW_TIMESTAMP,
+  };
+}
+
+/**
+ * A demo card product, as the card-details screen wants it.
+ *
+ * The summary fields go through the same `src/domain/catalog/summary.ts` functions the
+ * database path uses, so the demo cannot show a different headline rate or a different
+ * verification status from the one a real catalog row would produce.
+ */
+export function demoCardProduct(cardProductId: string): CardProductDetail {
+  const card = DEMO_CARDS.find((candidate) => candidate.cardProductId === cardProductId);
+  if (card === undefined) {
+    // The same failure the database gives for an id that is not there, rather than
+    // the permission error the refusing Supabase client would produce.
+    throw new DataError('not_found', 'That card is not in the demonstration catalog.');
+  }
+
+  // Filtered and ordered exactly as `getCardProduct` does, so the demo screen and the
+  // database screen list the same rules in the same order.
+  const rules = card.rules
+    .filter((rule) => rule.isActive)
+    .map(toRewardRuleRow)
+    .sort((a, b) => b.priority - a.priority);
+  const verification = weakestVerification(rules);
+
+  return {
+    id: card.cardProductId,
+    name: card.displayName,
+    issuerName: card.issuerName,
+    annualFeeUsd: card.annualFeeUsd,
+    foreignTransactionFeePercent: card.foreignTransactionFeePercent,
+    isFictional: true,
+    isUserDefined: false,
+    headline: headlineRuleLabel(rules),
+    verificationStatus: verification.status,
+    lastVerifiedAt: verification.lastVerifiedAt,
+    summary: null,
+    supportedCountryCodes: card.supportedCountryCodes,
+    // Every demo rule pays cash back in dollars, so there is no points programme to
+    // name. Inventing one would imply a valuation the demo does not have.
+    rewardProgramName: null,
+    rules,
+  };
 }
 
 /**

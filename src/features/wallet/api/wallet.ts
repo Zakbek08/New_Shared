@@ -135,6 +135,18 @@ export async function listUserCards(
 }
 
 export async function getUserCard(id: string): Promise<WalletCard> {
+  // Demo mode: found in the bundled wallet, or a not-found error — the same
+  // outcome the database gives for an id that is not there. Falling through to
+  // Supabase here would hit the refusing client and report a permissions problem
+  // for what is really a missing card.
+  if (isDemoMode()) {
+    const card = demoWalletCards().find((candidate) => candidate.id === id);
+    if (card === undefined) {
+      throw new DataError('not_found', 'That card is not in the demonstration wallet.');
+    }
+    return card;
+  }
+
   const supabase = getSupabaseClient();
 
   try {

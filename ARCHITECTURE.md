@@ -67,9 +67,17 @@ modules 10 and 11 — user offers and the spending-cap tracker — as of Phase 5
 and 13 — the administrative rules interface and the source-verification trail — as of
 Phase 6.
 
-All fourteen modules are now implemented. What remains for Phase 7 is review and hardening
-rather than new surface: RLS integration tests against a live Postgres, data export and
-account deletion, and a full accessibility pass.
+All fourteen modules are now implemented. Phase 7 was review and hardening rather than new
+surface: RLS integration tests against a live Postgres, data export and account deletion, and
+an accessibility audit.
+
+Module 13's cardholder-facing half landed last, in `src/features/provenance/`. Phase 6 built
+the curator's side of the verification trail — the editor, the review queue, the append-only
+history — and left two `PlaceholderSection`s where a _user_ would ask where a rate came from.
+Those are now the card detail's "Where these rates came from" and the recommendation detail's
+"Source document and change history", reading `public.sources` and
+`public.verification_history` through one query that is deliberately kept off the
+recommendation hot path: provenance is evidence about the numbers, not an input to them.
 
 One correction to the table above: module 6 is implemented as a **deterministic classifier
 plus a deterministic free-text parser** (`src/domain/purchaseText/`), not as a model call.

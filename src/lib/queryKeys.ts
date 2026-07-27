@@ -46,6 +46,13 @@ export const queryKeys = {
     all: ['caps'] as const,
     progress: () => ['caps', 'progress'] as const,
   },
+  provenance: {
+    all: ['provenance'] as const,
+    // Sorted and joined, so asking for the same rules in a different order hits the
+    // same cache entry. An array key would compare by identity per element and miss.
+    rules: (ruleIds: readonly string[]) =>
+      ['provenance', 'rules', [...ruleIds].sort().join(',')] as const,
+  },
   recommendations: {
     all: ['recommendations'] as const,
     recent: (limit: number) => ['recommendations', 'recent', limit] as const,

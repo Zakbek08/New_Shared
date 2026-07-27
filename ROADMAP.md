@@ -337,6 +337,46 @@ rather than claimed.
 
 ---
 
+## Phase 8 — Provenance on the screens that show the rates ✅ Complete
+
+Two regions were still `PlaceholderSection`s labelled Phase 6, and they were the last of
+them: "Where these rates came from" on the card detail, and "Source document and change
+history" on the recommendation detail. The data had existed since Phase 1 — `public.sources`
+and the append-only `public.verification_history` — and Phase 6 built the curator's side of
+it. What was missing was the cardholder's side: the ability to ask _says who?_ about a figure
+and get an answer.
+
+- ✅ `src/features/provenance/` — one read (`listRuleProvenance`), a pure wording layer
+  (`describe.ts`), and two sections. The read is deliberately separate from the wallet
+  snapshot: provenance is evidence _about_ the numbers, not an input to them, and loading it
+  on the hot path would slow every recommendation to answer a question nobody had asked yet.
+- ✅ **Freshness is derived, not stored.** A rate verified more than
+  `FRESHNESS_WINDOW_DAYS` ago reads as out of date even where the column still says
+  `verified`, via the `ruleFreshness` function that already backed the review queue. So the
+  catalog and the cardholder see the same judgement.
+- ✅ **The weakest evidence wins the summary.** A document is described with the weakest
+  verification among the rates read out of it, ordered by the same strength table
+  `weakestVerification` uses — extracted into `src/domain/catalog/summary.ts` so the demo
+  wallet, the catalog list and this section cannot summarise a card three different ways.
+- ✅ **Document type is stated bluntly.** An issuer's own terms, its marketing page, network
+  documentation and something a cardholder typed in are four different strengths of
+  evidence, and only the first carries no caveat.
+- ✅ **The demo cites no URL.** A plausible `https://northwind-financial.example/terms` would
+  be a fabricated _citation_, which is the same defect class as a fabricated rate and worse
+  in kind: a made-up number invites doubt, a made-up citation invites trust.
+- ✅ Card details and card products now work in demo mode too — both had no demo branch, so
+  tapping a card in the published preview would have hung against the placeholder host.
+  `demoRouting.test.ts` asserts every read the preview makes is served locally, with a
+  negative control that fails if `isDemoMode()` were ever hard-wired on.
+- ✅ A browser pass over the built bundle confirms both sections render from the real demo
+  data path, with no uncaught errors. Unit tests stub the query; only this answers whether a
+  person opening the link sees a citation.
+
+**Exit criteria:** met. No `PlaceholderSection` remains in any screen. 2,028 unit tests
+across 73 suites, no skips.
+
+---
+
 ## Out of scope — permanently
 
 Not "later". These are product boundaries, and the app is designed around their absence.

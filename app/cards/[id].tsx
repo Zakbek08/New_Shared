@@ -2,14 +2,17 @@
  * Screen 11 — Card Details.
  *
  * Everything WalletWise knows about one card in the wallet, plus the settings the
- * user can change. Cap progress and activation are live as of Phase 5; the source
- * and verification history arrive in Phase 6.
+ * user can change: earn rates, cap progress, rotating-category activation, and the
+ * source document behind each rate.
+ *
+ * The rates and their provenance are two views of the same rule rows — the earn-rate
+ * card lists them and `SourceSection` cites them, both off the one product query — so
+ * a rate can never appear without the evidence for it, or with someone else's.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DisclaimerNotice } from '@/components/Disclaimers';
-import { PlaceholderSection } from '@/components/PlaceholderSection';
 import { ErrorNotice, LoadingState } from '@/components/StateViews';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +25,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { VERIFICATION_STATUS_LABELS } from '@/domain/enums';
 import { CapTracker } from '@/features/caps/ui/CapTracker';
 import { RotatingCategoriesSection } from '@/features/caps/ui/RotatingCategories';
+import { SourceSection } from '@/features/provenance/ui/SourceSection';
 import {
   useArchiveUserCard,
   useCardProduct,
@@ -94,6 +98,9 @@ export default function CardDetailsScreen() {
   const wallet = card.data;
   const displayName = formatCardName(wallet.productName, wallet.nickname);
   const hasStoredDigits = wallet.lastFourCipher !== null;
+  // Read off the product query the Earn rates card already made, rather than
+  // fetching a second view of the same card that could disagree with it.
+  const ruleIds = (product.data?.rules ?? []).map((rule) => rule.id);
 
   return (
     <Screen scroll accessibilityLabel={`${displayName} details`} testID="card-details-screen">
@@ -251,12 +258,9 @@ export default function CardDetailsScreen() {
           testID="card-details-enrollment"
         />
 
-        <PlaceholderSection
-          phase="Phase 6"
-          title="Where these rates came from"
-          description="The source behind each rule and its full verification history."
-          testID="card-details-sources"
-        />
+        {/* The same rule list, in the same order, as the Earn rates card above — so
+            every rate the user just read has a citation directly beneath it. */}
+        <SourceSection ruleIds={ruleIds} asOf={asOf} testID="card-details-sources" />
 
         {/* ---- Archive / restore ---- */}
         <Card emphasis={wallet.isArchived ? 'neutral' : 'negative'}>
