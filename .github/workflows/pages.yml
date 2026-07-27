@@ -82,11 +82,19 @@ jobs:
       - name: Disable Jekyll processing
         run: touch dist/.nojekyll
 
-      # `enablement: true` turns Pages on for the repository if it is off, so
-      # publishing needs no manual setup in the repository settings.
+      # NOT using `enablement: true`.
+      #
+      # It looks like it would save a manual step, and it cannot: creating a Pages
+      # site needs a permission the workflow token does not have, whatever is
+      # written in `permissions:` above. The first attempt failed with
+      # "Create Pages site failed. Error: Resource not accessible by integration",
+      # and took the whole build down with it after every earlier step had
+      # succeeded.
+      #
+      # So Pages is enabled once, by hand, in Settings → Pages → Source: GitHub
+      # Actions. After that this step just reads the existing configuration and
+      # every later deployment is automatic. See PREVIEW.md.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
