@@ -29,30 +29,48 @@ export type Environment = z.infer<typeof environmentSchema>;
 /**
  * The single place `process.env` is read.
  *
- * Narrowed explicitly because the ambient type of `process.env` depends on which
- * `@types/node` the toolchain happens to load — under some configurations it
- * resolves to `any`, which would let an unchecked value flow onward. Metro
- * inlines `EXPO_PUBLIC_*` as string literals at build time, so a string-or-
- * undefined view of it is exactly right.
+ * EVERY VARIABLE IS WRITTEN OUT LONGHAND, AND THAT IS LOAD-BEARING.
+ * Metro inlines `EXPO_PUBLIC_*` by syntactically replacing each static
+ * `process.env.SOME_NAME` member expression with a string literal at build time.
+ * A helper that takes the variable name as an argument — `readRaw(name)` reading
+ * `process.env[name]` — is invisible to that transform. Nothing gets substituted,
+ * `process.env` is an empty object on Hermes and on the web, and the app throws
+ * "Invalid environment configuration" on boot with a correct `.env` right there.
+ *
+ * That is not a hypothetical: it is what this function used to do, and it made
+ * every real build unstartable while all of the unit tests passed, because Jest
+ * runs in Node where `process.env` is genuinely populated and dynamic access
+ * works. `env.test.ts` now asserts the shape of these reads for that reason.
+ *
+ * So: no loops, no computed keys, no clever table of names. One line each.
+ * `src/config/env.d.ts` declares them so dot access satisfies
+ * `noPropertyAccessFromIndexSignature`.
+ *
+ * Read inside a function rather than at module scope so `resetEnvCache()` can
+ * force a genuine re-read.
  */
-function readRaw(name: string): string | undefined {
-  const environment = process.env as Record<string, string | undefined>;
-  return environment[name];
+function readRawEnvironment(): Readonly<Record<string, string | undefined>> {
+  return {
+    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+    EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
+    EXPO_PUBLIC_ENABLE_DEMO_DATA: process.env.EXPO_PUBLIC_ENABLE_DEMO_DATA,
+    EXPO_PUBLIC_ANALYTICS_WRITE_KEY: process.env.EXPO_PUBLIC_ANALYTICS_WRITE_KEY,
+    EXPO_PUBLIC_ERROR_MONITORING_DSN: process.env.EXPO_PUBLIC_ERROR_MONITORING_DSN,
+  };
 }
 
-function readBoolean(name: string, fallback: boolean): boolean {
-  const value = readRaw(name);
+function readBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === '') return fallback;
   return value === 'true' || value === '1';
 }
 
-function readOptional(name: string): string | null {
-  const value = readRaw(name);
+function readOptional(value: string | undefined): string | null {
   return value === undefined || value === '' ? null : value;
 }
 
-function readString(name: string, fallback = ''): string {
-  return readRaw(name) ?? fallback;
+function readString(value: string | undefined, fallback = ''): string {
+  return value ?? fallback;
 }
 
 /**
@@ -64,13 +82,15 @@ function readString(name: string, fallback = ''): string {
  * the value, so a bad key cannot leak into a crash report.
  */
 function loadEnvironment(): Environment {
+  const raw = readRawEnvironment();
+
   const candidate = {
-    supabaseUrl: readString('EXPO_PUBLIC_SUPABASE_URL'),
-    supabaseAnonKey: readString('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
-    environment: readString('EXPO_PUBLIC_ENVIRONMENT', 'development'),
-    enableDemoData: readBoolean('EXPO_PUBLIC_ENABLE_DEMO_DATA', true),
-    analyticsWriteKey: readOptional('EXPO_PUBLIC_ANALYTICS_WRITE_KEY'),
-    errorMonitoringDsn: readOptional('EXPO_PUBLIC_ERROR_MONITORING_DSN'),
+    supabaseUrl: readString(raw['EXPO_PUBLIC_SUPABASE_URL']),
+    supabaseAnonKey: readString(raw['EXPO_PUBLIC_SUPABASE_ANON_KEY']),
+    environment: readString(raw['EXPO_PUBLIC_ENVIRONMENT'], 'development'),
+    enableDemoData: readBoolean(raw['EXPO_PUBLIC_ENABLE_DEMO_DATA'], true),
+    analyticsWriteKey: readOptional(raw['EXPO_PUBLIC_ANALYTICS_WRITE_KEY']),
+    errorMonitoringDsn: readOptional(raw['EXPO_PUBLIC_ERROR_MONITORING_DSN']),
   };
 
   const parsed = environmentSchema.safeParse(candidate);

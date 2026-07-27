@@ -614,6 +614,50 @@ work.
 
 ---
 
+## Bundling is its own test, and it found a ship-blocker
+
+Every suite above mocks its dependencies and runs under Node. That leaves a whole class of
+defect invisible: anything whose behaviour differs _after Metro has run_. The first time the
+app was bundled — `npx expo export --platform web`, 1,147 modules — it would not start.
+
+`src/config/env.ts` read its configuration through a dynamic key:
+
+```ts
+function readRaw(name: string) {
+  return (process.env as Record<string, string | undefined>)[name];
+}
+```
+
+Metro inlines `EXPO_PUBLIC_*` by syntactically replacing each static
+`process.env.SOME_NAME` expression with a string literal. A computed read is invisible to
+that transform, so **nothing was substituted**: the bundle contained neither the Supabase URL
+nor the anon key, `process.env` was an empty object at runtime, and the app threw
+`Invalid environment configuration` on boot — on device and on web — with a correct `.env`
+sitting next to it.
+
+Every one of the 1,844 tests passed throughout, because Jest runs in Node, where
+`process.env` really is populated and dynamic access really does work.
+
+**Why it was written that way.** `@types/node` types `ProcessEnv` with an index signature,
+and this project sets `noPropertyAccessFromIndexSignature`, so `process.env.FOO` is a
+compile error (TS4111). The dynamic read satisfied the compiler. The fix is
+`src/types/env.d.ts`, which declares each variable as a real property so static dot access
+both typechecks and inlines. It lives in `src/types/` rather than beside `env.ts` because
+TypeScript treats a sibling `env.d.ts` as the declaration output for `env.ts` and silently
+ignores its global augmentations.
+
+**How it is now guarded.** `src/config/env.test.ts` — a module that previously had no tests
+at all — asserts the _shape_ of the reads, not only their behaviour: each variable must
+appear as a static `process.env.NAME` expression, `process.env` must never be indexed by a
+computed key, and every variable read must be declared. A behavioural test cannot catch
+this, because under Node the broken and fixed versions behave identically.
+
+The lesson generalises: **a green suite is not a running app.** Bundling should happen in CI
+for exactly this reason, and the check that the values are inlined is a `grep` over the
+bundle.
+
+---
+
 ## Integration and RLS testing — `npm run test:db`
 
 Structural RLS assertions catch a missing policy but not a wrong predicate. This is a

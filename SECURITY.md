@@ -78,6 +78,15 @@ needs.
 - `src/config/env.ts` is the only reader of `process.env`, and validates with Zod.
 - **Only `EXPO_PUBLIC_*` reaches the device.** Metro inlines those into the bundle, so they
   are public by construction. `.env.example` says so at the top.
+- **The reads must be static, and a test enforces it.** Metro inlines a variable by
+  syntactically replacing each `process.env.SOME_NAME` member expression with a string
+  literal. A computed read — `process.env[name]` — is invisible to that transform, so
+  nothing is substituted and `process.env` is an empty object at runtime. `env.ts` shipped
+  exactly that bug and the app could not boot in any real build, while all 1,844 unit tests
+  passed, because Jest runs in Node where dynamic access works. `src/types/env.d.ts`
+  declares each variable so static dot access satisfies
+  `noPropertyAccessFromIndexSignature`, and `env.test.ts` asserts the shape of the reads
+  rather than only their behaviour. See TESTING.md.
 - `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` and `ANTHROPIC_API_KEY` have no
   `EXPO_PUBLIC_` prefix and are unreachable from client code. They belong in Supabase Edge
   Function secrets or CI.

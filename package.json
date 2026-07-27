@@ -26,6 +26,7 @@
     "verify:all": "npm run verify && npm run test:db"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@hookform/resolvers": "^5.2.2",
     "@noble/ciphers": "^2.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -68,6 +69,7 @@
     "jest-expo": "~54.0.17",
     "prettier": "^3.6.2",
     "react-test-renderer": "19.1.0",
+    "supabase": "^2.109.1",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.45.0"
   }
