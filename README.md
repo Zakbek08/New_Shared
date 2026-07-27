@@ -141,6 +141,9 @@ supabase db reset         # applies migrations, then loads the fictional seed da
 | `npm run verify`                                  | **Format check, lint, typecheck and tests — run this before committing** |
 | `npm run test:db`                                 | Row-level-security and cap-window tests against a real Postgres          |
 | `npm run verify:all`                              | `verify` plus `test:db`. Needs a local Postgres server                   |
+| `npm run build:web`                               | Bundles the app for web into `dist/`                                     |
+| `npm run check:bundle`                            | Asserts the built bundle has its configuration inlined                   |
+| `npm run smoke:web`                               | Boots `dist/` in Chromium and checks the app mounts                      |
 
 ---
 

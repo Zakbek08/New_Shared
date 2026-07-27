@@ -4,6 +4,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+# Screenshot and report from `npm run smoke:web` / the CI smoke job.
+smoke/
 web-build/
 expo-env.d.ts
 

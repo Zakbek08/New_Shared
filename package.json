@@ -23,6 +23,9 @@
     "test:coverage": "jest --coverage",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test -- --ci",
     "test:db": "node scripts/db-test.mjs",
+    "build:web": "expo export --platform web --output-dir dist",
+    "check:bundle": "node scripts/check-bundle.mjs dist",
+    "smoke:web": "node scripts/smoke-web.mjs dist",
     "verify:all": "npm run verify && npm run test:db"
   },
   "dependencies": {

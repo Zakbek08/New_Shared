@@ -614,6 +614,59 @@ work.
 
 ---
 
+## Continuous integration
+
+`.github/workflows/verify.yml`. Four jobs, deliberately separate so a failure names
+its own cause rather than "CI is red":
+
+| Job        | What it runs                                                   | Why it is its own job                                         |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| `verify`   | `format:check`, `lint`, `typecheck`, `test:coverage --ci`      | The fast feedback loop; also enforces the coverage thresholds |
+| `database` | `test:db` — 70 assertions on a real throwaway Postgres cluster | Needs Postgres server binaries, not just a client             |
+| `bundle`   | `expo export --platform web`, then `check-bundle.mjs`          | Walks the whole import graph, which no unit test does         |
+| `smoke`    | serves the bundle, boots it in Chromium, asserts it mounts     | "It compiled" and "it runs" are different claims              |
+
+Runs on every push to `main` and `claude/**`, on every pull request, and on
+`workflow_dispatch` so a run can be repeated after a base-branch fix without an
+empty commit. In-flight runs are superseded on branches but never on `main`, where
+the run is the record of whether that commit was good.
+
+`test:coverage` rather than `test`, so the thresholds in `jest.config.js` are
+enforced and not merely configured.
+
+### The two jobs that exist because of a specific defect
+
+`bundle` and `smoke` were added after the boot-blocking `env.ts` defect described
+below. Both were checked against a reintroduction of that defect before being
+trusted:
+
+- **`check-bundle.mjs`** compares the built output against the values the build
+  used, and fails naming each variable that is absent. Against a rebuilt bundle
+  with the defect restored, it exited 1 on both required variables.
+- **`smoke-web.mjs`** fails if `#root` is empty, if anything threw, or if the first
+  screen is missing either the product name or the security disclaimer. Against a
+  bundle with `throw new Error(...)` prepended, it reported all four failures and
+  exited 1.
+
+Two honest limitations, stated in the scripts themselves rather than left for
+someone to discover:
+
+- A substring match only proves inlining for a **distinctive** value.
+  `EXPO_PUBLIC_ENVIRONMENT=development` and `ENABLE_DEMO_DATA=true` appear all over
+  a React Native bundle for unrelated reasons, so those are reported as _not
+  checked_ rather than as a pass. The URL and anon key are long and exercise the
+  same inlining path, which is what makes them sufficient.
+- The `process.env[` pattern check catches only the direct form. Assigning
+  `process.env` to a local and indexing that — what the original defect did —
+  compiles to something the pattern cannot see. The value comparison is the
+  load-bearing check; that one is a cheap extra signal.
+
+`smoke` deliberately does **not** sign in. There is no backend in CI, so auth
+failures are expected and are not counted against the run. What is asserted is
+that the app renders its first screen and got far enough to try.
+
+---
+
 ## Bundling is its own test, and it found a ship-blocker
 
 Every suite above mocks its dependencies and runs under Node. That leaves a whole class of

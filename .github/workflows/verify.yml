@@ -1,0 +1,197 @@
+# WalletWise CI
+#
+# Four jobs, deliberately separate so a failure names its own cause rather than
+# "CI is red":
+#
+#   verify   format, lint, typecheck, unit tests, coverage thresholds
+#   database the RLS matrix and the cap-window cross-check, against real Postgres
+#   bundle   builds the app and proves its configuration is inlined
+#   smoke    boots the built bundle in a browser and checks it mounts
+#
+# The last two exist because of a specific defect. `src/config/env.ts` read
+# process.env through a computed key; Metro could not inline it, the app could not
+# boot in any real build, and all 1,844 unit tests passed anyway because Jest runs
+# in Node where dynamic access works. A green unit suite is not a running app, so
+# CI builds and boots it. See TESTING.md.
+name: verify
+
+on:
+  push:
+    branches: ['main', 'claude/**']
+  pull_request:
+  # Manual runs, for re-checking after a base-branch fix without an empty commit.
+  workflow_dispatch:
+
+# A new push supersedes an in-flight run on the same ref. Never cancel on main:
+# there, the run is the record of whether that commit was good.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  # Public-by-design placeholders, and the standard local-stack values. Real
+  # secrets never appear here: only EXPO_PUBLIC_* reaches a bundle, so anything
+  # in this block is public by construction (SECURITY.md requirement 4).
+  #
+  # The URL and key must be long and distinctive, because check-bundle.mjs proves
+  # inlining by finding them in the built output — a short value would match by
+  # coincidence and prove nothing.
+  EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder-project.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLWNpIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODMxMjM0MDB9.ci-placeholder-not-a-real-signature
+  EXPO_PUBLIC_ENVIRONMENT: test
+  EXPO_PUBLIC_ENABLE_DEMO_DATA: 'true'
+
+jobs:
+  verify:
+    name: format, lint, typecheck, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the engines field in package.json.
+          node-version: 22
+          cache: npm
+
+      # `ci` not `install`: it fails on a package-lock that disagrees with
+      # package.json, which is the point of committing the lock file.
+      - run: npm ci
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: ESLint
+        # Includes the credential-name rules from eslint.config.mjs, so a
+        # `cardNumber` identifier fails the build here.
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      # Coverage rather than a plain test run, so the thresholds in
+      # jest.config.js are enforced and not merely configured.
+      - name: Unit tests and coverage thresholds
+        run: npm run test:coverage -- --ci
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  database:
+    name: RLS and cap-window, on real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # scripts/db-test.mjs builds its own throwaway cluster with initdb, so it
+      # needs the server binaries, not a running service. Ubuntu runners ship
+      # PostgreSQL, but the version moves; this asserts what we got rather than
+      # assuming, because a silent absence would make the script exit 1 with an
+      # install message and look like a script bug.
+      - name: Locate PostgreSQL server binaries
+        run: |
+          set -euo pipefail
+          found=""
+          for dir in /usr/lib/postgresql/*/bin; do
+            if [ -x "$dir/initdb" ]; then found="$dir"; fi
+          done
+          if [ -z "$found" ]; then
+            echo "No PostgreSQL server binaries on the runner; installing."
+            sudo apt-get update
+            sudo apt-get install -y postgresql
+            for dir in /usr/lib/postgresql/*/bin; do
+              if [ -x "$dir/initdb" ]; then found="$dir"; fi
+            done
+          fi
+          echo "Using $found"
+          "$found/initdb" --version
+
+      - name: Row-level security matrix and cap-window cross-check
+        run: npm run test:db
+
+  bundle:
+    name: bundle, and prove the config is inlined
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Walks the entire import graph, which the unit suite does not: every test
+      # mocks its dependencies. A broken import or a missing package fails here.
+      - name: Export the web bundle
+        run: npx expo export --platform web --output-dir dist
+
+      # The regression guard for the boot-blocking defect. env.test.ts checks the
+      # *shape* of the reads in source; this checks the *outcome* in the artefact,
+      # which is what would catch a change in Metro or babel-preset-expo that
+      # breaks inlining without touching env.ts.
+      - name: Assert the configuration is inlined
+        run: node scripts/check-bundle.mjs dist
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: dist/
+          retention-days: 7
+
+  smoke:
+    name: boot the bundle in a browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: bundle
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-bundle
+          path: dist
+
+      - name: Install Chromium
+        run: npx --yes playwright@1.62.0 install --with-deps chromium
+
+      # Serves the bundle and asserts the app mounts with no uncaught error.
+      # "It compiled" and "it runs" are different claims; this makes the second
+      # one testable.
+      - name: Boot and assert it mounts
+        run: node scripts/smoke-web.mjs dist
+
+      - name: Upload the screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-screenshot
+          path: smoke/
+          retention-days: 7
