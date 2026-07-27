@@ -179,8 +179,16 @@ jobs:
           name: web-bundle
           path: dist
 
-      - name: Install Chromium
-        run: npx --yes playwright@1.62.0 install --with-deps chromium
+      # Browsers only — the `playwright` module itself is a devDependency, so
+      # `npm ci` above provides it. Installing the CLI with `npx playwright@x.y.z`
+      # instead does NOT put the module in node_modules, which is exactly how the
+      # first run of this job failed: the script's `import('playwright')` threw and
+      # it reported "Playwright is not installed".
+      #
+      # No version pin here on purpose: npx resolves the locally installed
+      # playwright, so the browser build always matches the module.
+      - name: Install the Chromium build matching the installed Playwright
+        run: npx playwright install --with-deps chromium
 
       # Serves the bundle and asserts the app mounts with no uncaught error.
       # "It compiled" and "it runs" are different claims; this makes the second
@@ -195,3 +203,7 @@ jobs:
           name: boot-screenshot
           path: smoke/
           retention-days: 7
+          # The script writes smoke/ only once the browser has launched, so a
+          # failure before that legitimately leaves nothing to upload. Warning
+          # about it buries the real error.
+          if-no-files-found: ignore
