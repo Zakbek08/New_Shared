@@ -1,0 +1,104 @@
+# Publishes the WalletWise web build to GitHub Pages.
+#
+# WHY THIS EXISTS
+# So the app can be looked at from a phone or a laptop without installing
+# anything. A development server is no use for that: it lives on whichever
+# machine started it, and dies with it. Pages is a static host, so the link keeps
+# working.
+#
+# WHAT IS PUBLISHED, AND WHAT IT CAN DO
+# The `EXPO_PUBLIC_*` values below are placeholders, so the published app renders
+# and can be navigated, but cannot sign anyone in — there is no Supabase project
+# behind it. That is a real limitation and it is stated here rather than left to be
+# discovered. To make the deployed app fully functional, add repository secrets
+# named SUPABASE_URL and SUPABASE_ANON_KEY and they will be used instead.
+#
+# Nothing secret is involved either way. Only EXPO_PUBLIC_* variables reach a
+# bundle, and the Supabase anon key is public by design — row-level security is
+# what protects the data, not key secrecy. See SECURITY.md.
+name: pages
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+# Least privilege: read the repo, write a Pages deployment, and nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one in flight — a half-finished
+# deployment would leave the site broken.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Export the web bundle
+        env:
+          # A real project's values if they have been provided as secrets;
+          # otherwise placeholders that are long enough to pass validation and
+          # distinctive enough for check-bundle.mjs to prove inlining.
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder-not-a-real-project.supabase.co' }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLXByZXZpZXciLCJyb2xlIjoiYW5vbiIsImV4cCI6MTk4MzEyMzQwMH0.preview-placeholder-not-a-real-signature' }}
+          EXPO_PUBLIC_ENVIRONMENT: development
+          EXPO_PUBLIC_ENABLE_DEMO_DATA: 'true'
+        run: npx expo export --platform web --output-dir dist
+
+      # The same guard the verify workflow runs. A published bundle with no
+      # configuration inlined would render a blank screen, which is precisely the
+      # defect this check exists to catch.
+      - name: Assert the configuration is inlined
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder-not-a-real-project.supabase.co' }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLXByZXZpZXciLCJyb2xlIjoiYW5vbiIsImV4cCI6MTk4MzEyMzQwMH0.preview-placeholder-not-a-real-signature' }}
+        run: node scripts/check-bundle.mjs dist
+
+      # Expo Router's web output is a single-page app: every route is served by
+      # index.html and resolved client-side. Pages returns its own 404 page for an
+      # unknown path, so a copy of index.html named 404.html makes a deep link or a
+      # refresh work instead of showing GitHub's "file not found".
+      - name: Make client-side routing survive a refresh
+        run: cp dist/index.html dist/404.html
+
+      # Stops Pages running the output through Jekyll, which strips files and
+      # directories beginning with an underscore — and Expo puts everything in
+      # `_expo/`.
+      - name: Disable Jekyll processing
+        run: touch dist/.nojekyll
+
+      # `enablement: true` turns Pages on for the repository if it is off, so
+      # publishing needs no manual setup in the repository settings.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

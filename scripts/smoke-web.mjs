@@ -36,6 +36,28 @@ if (bundleDir === undefined) {
 const OUT_DIR = 'smoke';
 const PORT = 8099;
 
+/**
+ * The path the app is served under, read from the same place the build reads it.
+ *
+ * GitHub Pages serves a project site from a subdirectory, so `experiments.baseUrl`
+ * in app.json is `/New_Shared` and every asset reference in index.html is prefixed
+ * with it. Serving the bundle at `/` here would 404 on its own JavaScript and the
+ * app would never mount — the check would fail for a reason that has nothing to do
+ * with the app. Reading the value rather than hard-coding it means this keeps
+ * matching if the deployment path changes.
+ */
+function readBaseUrl() {
+  try {
+    const config = JSON.parse(readFileSync('app.json', 'utf8'));
+    const baseUrl = config?.expo?.experiments?.baseUrl;
+    return typeof baseUrl === 'string' ? baseUrl.replace(/\/$/, '') : '';
+  } catch {
+    return '';
+  }
+}
+
+const BASE_URL = readBaseUrl();
+
 /** Text the first screen must contain, so a blank mount cannot pass. */
 const EXPECTED_PHRASES = [
   'WalletWise',
@@ -60,8 +82,16 @@ const MIME = {
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', `http://127.0.0.1:${PORT}`);
+
+  // Strip the deployment prefix, so `/New_Shared/_expo/x.js` resolves to
+  // `dist/_expo/x.js` exactly as it does on the real host.
+  let pathname = decodeURIComponent(url.pathname);
+  if (BASE_URL !== '' && pathname.startsWith(BASE_URL)) {
+    pathname = pathname.slice(BASE_URL.length) || '/';
+  }
+
   // `normalize` then reject `..` so a path cannot escape the bundle directory.
-  const relative = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
+  const relative = normalize(pathname).replace(/^(\.\.[/\\])+/, '');
   let filePath = join(bundleDir, relative);
 
   if (relative === '/' || relative === '\\' || !existsSync(filePath)) {
@@ -80,7 +110,8 @@ const server = createServer((request, response) => {
 });
 
 await new Promise((resolve) => server.listen(PORT, '127.0.0.1', resolve));
-process.stdout.write(`${DIM}Serving ${bundleDir} on http://127.0.0.1:${PORT}${RESET}\n`);
+const appUrl = `http://127.0.0.1:${PORT}${BASE_URL}/`;
+process.stdout.write(`${DIM}Serving ${bundleDir} at ${appUrl}${RESET}\n`);
 
 /** Resolved lazily so the script can explain itself if Playwright is absent. */
 let chromium;
@@ -137,7 +168,7 @@ page.on('console', (message) => {
 let exitCode = 0;
 
 try {
-  await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load', timeout: 60_000 });
+  await page.goto(appUrl, { waitUntil: 'load', timeout: 60_000 });
 
   // A fixed settle window rather than waiting on a selector: the assertion is
   // about the app mounting at all, so it must not depend on a testID that could
