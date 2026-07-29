@@ -100,7 +100,7 @@ being reproducible and no test could pin it.
 
 ## Where the numbers come from
 
-`src/data/marketCards.ts` holds 22 real products from 8 issuers. Each carries the issuer's
+`src/data/marketCards.ts` holds 29 real products from 11 issuers. Each carries the issuer's
 own product-page URL and the date its rates were read off that page, and both are shown in
 the UI. The file is a **dated transcription, not a live feed** — WalletWise does not scrape
 issuer pages, so a human reads them and types the result, which is exactly why the date is

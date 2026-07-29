@@ -104,6 +104,15 @@ export interface MarketCard {
 
 const AS_OF = '2026-05-01';
 
+/**
+ * Cards whose published terms were re-read on 29 July 2026.
+ *
+ * A second date rather than one date for the whole file, because a single constant would
+ * be a lie about the cards it was not applied to. `ratesAsOf` is per-card precisely so
+ * this stays honest as the catalog is maintained in batches.
+ */
+const CHECKED_2026_07_29 = '2026-07-29';
+
 export const MARKET_CARDS: readonly MarketCard[] = [
   // ---- American Express ---------------------------------------------------
   {
@@ -279,6 +288,26 @@ export const MARKET_CARDS: readonly MarketCard[] = [
     baseLabel: '1.5x points on every purchase',
     bonuses: [],
     searchTerms: ['bofa', 'bank of america', 'travel rewards'],
+  },
+  {
+    id: 'boa-unlimited-cash',
+    productName: 'Unlimited Cash Rewards',
+    issuerName: 'Bank of America',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 3,
+    rewardType: 'cash_back_percent',
+    summary: 'Flat 1.5% on everything, no categories to track.',
+    sourceUrl:
+      'https://www.bankofamerica.com/credit-cards/products/unlimited-cash-back-credit-card/',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 1.5,
+    baseLabel: '1.5% cash back on every purchase',
+    // Bank of America publishes a 2% first-year rate for new cardholders, and Preferred
+    // Rewards members earn 25–75% more. Neither is modelled: the app cannot know how long
+    // someone has held a card or what their banking balances are, and guessing either
+    // would inflate the figure. 1.5% is what this card pays without conditions.
+    bonuses: [],
+    searchTerms: ['bofa', 'bank of america', 'unlimited cash'],
   },
   {
     id: 'boa-premium-rewards',
@@ -688,6 +717,142 @@ export const MARKET_CARDS: readonly MarketCard[] = [
       },
     ],
     searchTerms: ['wells fargo', 'autograph'],
+  },
+
+  // ---- Goldman Sachs ------------------------------------------------------
+  {
+    id: 'apple-card',
+    productName: 'Apple Card',
+    issuerName: 'Apple (Goldman Sachs)',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 0,
+    rewardType: 'cash_back_percent',
+    summary:
+      '2% Daily Cash whenever you pay with Apple Pay, 1% with the physical card. The 3% at Apple and select merchants is not modelled — see the note on this card.',
+    sourceUrl: 'https://www.apple.com/apple-card/',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 1,
+    baseLabel: '1% Daily Cash when you use the physical card',
+    bonuses: [
+      {
+        // The engine's payment-method dimension earns its keep here: on this card the
+        // difference between tapping the phone and tapping the card is the whole
+        // difference between 2% and 1%.
+        label: '2% Daily Cash on any purchase paid with Apple Pay',
+        rate: 2,
+        paymentMethods: ['apple_pay'],
+      },
+    ],
+    // Apple also pays 3% at Apple and at named merchants (Nike, Uber, Walgreens and
+    // others) when paid with Apple Pay. That is merchant-specific, and WalletWise has no
+    // merchant list — modelling it would mean guessing which shop you are standing in.
+    // Omitted rather than approximated, and the summary says so, so the figure shown is
+    // the floor rather than a hopeful maximum.
+    searchTerms: ['apple', 'goldman', 'daily cash', 'iphone'],
+  },
+
+  // ---- TD Bank ------------------------------------------------------------
+  {
+    id: 'td-cash',
+    productName: 'TD Cash Credit Card',
+    issuerName: 'TD Bank',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 3,
+    rewardType: 'cash_back_percent',
+    summary: 'You choose the 3% and 2% categories, and can change them each quarter.',
+    sourceUrl: 'https://www.td.com/us/en/personal-banking/credit-cards/cash-card',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 1,
+    baseLabel: '1% cash back on everything else',
+    bonuses: [
+      {
+        // Which categories are live is the cardholder's own quarterly choice, and the app
+        // cannot know it. Dining and groceries are only TD's opening default. So both
+        // rates need confirming before they count — the same treatment as a rotating
+        // bonus, for the same reason.
+        label: '3% in the category you choose (dining by default)',
+        rate: 3,
+        requiresEnrollment: true,
+      },
+      {
+        label: '2% in your second chosen category (groceries by default)',
+        rate: 2,
+        requiresEnrollment: true,
+      },
+    ],
+    searchTerms: ['td', 'td bank', 'td cash'],
+  },
+  {
+    id: 'td-double-up',
+    productName: 'TD Double Up Credit Card',
+    issuerName: 'TD Bank',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 3,
+    rewardType: 'cash_back_percent',
+    summary: 'Flat 2% on everything, no categories to track.',
+    sourceUrl: 'https://www.td.com/us/en/personal-banking/credit-cards/double-up',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 2,
+    baseLabel: '2% cash back on every purchase',
+    bonuses: [],
+    searchTerms: ['td', 'td bank', 'double up'],
+  },
+
+  // ---- Costco, issued by Citi --------------------------------------------
+  {
+    id: 'citi-costco-anywhere',
+    productName: 'Costco Anywhere Visa',
+    issuerName: 'Citi',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 0,
+    rewardType: 'cash_back_percent',
+    summary:
+      'No annual fee with a paid Costco membership. 4% on petrol and EV charging, 3% on restaurants and travel.',
+    sourceUrl: 'https://www.citi.com/credit-cards/citi-costco-anywhere-visa-credit-card',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 1,
+    baseLabel: '1% cash back on everything else',
+    bonuses: [
+      {
+        // Citi publishes 5% at Costco's own petrol stations and 4% elsewhere, sharing one
+        // $7,000 yearly cap. Modelled at the 4% anyone can get: the 5% needs the app to
+        // know you are at a Costco pump, and it has no merchant list. Understating is the
+        // safe direction — this card can only do better than the figure shown.
+        label: '4% on petrol and EV charging, on up to $7,000 per year',
+        rate: 4,
+        categories: ['gas'],
+        capUsd: 7000,
+        capPeriod: 'calendar_year',
+      },
+      {
+        label: '3% at restaurants and on eligible travel',
+        rate: 3,
+        categories: ['dining', 'airfare', 'hotel', 'general_travel'],
+      },
+      {
+        label: '2% on purchases at Costco and Costco.com',
+        rate: 2,
+        categories: ['warehouse_club'],
+      },
+    ],
+    searchTerms: ['costco', 'citi', 'anywhere'],
+  },
+
+  // ---- Fidelity, issued by Elan ------------------------------------------
+  {
+    id: 'fidelity-rewards',
+    productName: 'Fidelity Rewards Visa Signature',
+    issuerName: 'Fidelity',
+    annualFeeUsd: 0,
+    foreignTransactionFeePercent: 0,
+    rewardType: 'cash_back_percent',
+    summary: 'Flat 2% on everything, at full value only when redeemed into a Fidelity account.',
+    sourceUrl: 'https://www.fidelity.com/spend-save/visa-signature-card',
+    ratesAsOf: CHECKED_2026_07_29,
+    baseRate: 2,
+    baseLabel: '2% cash back on every purchase',
+    bonuses: [],
+    searchTerms: ['fidelity', 'rewards visa'],
   },
 ];
 

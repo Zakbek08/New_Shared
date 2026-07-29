@@ -43,7 +43,7 @@ npx jest -t "cap"         # by test name
 npm run verify            # format + lint + typecheck + tests
 ```
 
-**1,301 tests across 36 suites, no skips.**
+**1,177 tests across 32 suites, no skips.**
 
 ---
 

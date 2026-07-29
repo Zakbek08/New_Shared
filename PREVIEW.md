@@ -77,7 +77,7 @@ cards already there.
 
 ## Where the rates come from
 
-22 cards from 8 issuers: American Express, Bank of America, Capital One, Chase, Citi,
+29 cards from 11 issuers: American Express, Apple (Goldman Sachs), Bank of America, Capital One, Chase, Citi, Discover, Fidelity, TD Bank, U.S. Bank, Wells Fargo.
 Discover, U.S. Bank and Wells Fargo.
 
 Each card's rates were read by hand from that issuer's own product page. Every card shows

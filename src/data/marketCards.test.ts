@@ -233,6 +233,114 @@ describe('a bonus that needs activation is not counted until it is activated', (
   });
 });
 
+describe('how you pay changes the answer', () => {
+  // The Apple Card is the clearest case in the catalog: 2% with Apple Pay, 1% with the
+  // physical card, same purchase. If the engine ignored the payment method both would
+  // come back the same and the card would be mispriced half the time.
+  const groceries = { amountUsd: 100, categoryId: getCategoryBySlug('grocery').id };
+
+  it('Apple Card earns $2.00 on $100 paid with Apple Pay', () => {
+    const result = evaluate(
+      ['apple-card'],
+      purchase({ ...groceries, paymentMethod: 'apple_pay' }),
+    );
+
+    expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(2, 2);
+  });
+
+  it('Apple Card earns $1.00 on the same $100 tapped with the card itself', () => {
+    const result = evaluate(
+      ['apple-card'],
+      purchase({ ...groceries, paymentMethod: 'physical_card' }),
+    );
+
+    expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(1, 2);
+  });
+
+  // Consequence worth pinning: which card to reach for depends on how you are paying.
+  it('picks the Apple Card over a flat 1.5% card only when paying by phone', () => {
+    const byPhone = evaluate(
+      ['boa-unlimited-cash', 'apple-card'],
+      purchase({ ...groceries, paymentMethod: 'apple_pay' }),
+    );
+    const byCard = evaluate(
+      ['boa-unlimited-cash', 'apple-card'],
+      purchase({ ...groceries, paymentMethod: 'physical_card' }),
+    );
+
+    // 2% ($2.00) beats 1.5% ($1.50) by phone; 1% ($1.00) loses to it by card.
+    expect(byPhone.recommended?.card.cardProductId).toBe('apple-card');
+    expect(byCard.recommended?.card.cardProductId).toBe('boa-unlimited-cash');
+  });
+});
+
+describe('the cards added on 29 July 2026', () => {
+  // 4% of $60 of petrol = $2.40, under the $7,000 yearly cap.
+  it('Costco Anywhere Visa earns $2.40 on $60 of petrol', () => {
+    const result = evaluate(
+      ['citi-costco-anywhere'],
+      purchase({ amountUsd: 60, categoryId: getCategoryBySlug('gas').id }),
+    );
+
+    expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(2.4, 2);
+  });
+
+  // 2% of $100 = $2.00, flat, whatever the category.
+  it.each([
+    ['td-double-up', 2],
+    ['fidelity-rewards', 2],
+    ['boa-unlimited-cash', 1.5],
+  ])('%s pays its flat rate on a $100 purchase', (cardId, rate) => {
+    const result = evaluate(
+      [cardId],
+      purchase({ amountUsd: 100, categoryId: getCategoryBySlug('utilities').id }),
+    );
+
+    expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(rate, 2);
+  });
+
+  // TD lets the cardholder pick which categories earn 3% and 2%, and change them every
+  // quarter. The app cannot know the current choice, so both rates wait for confirmation
+  // — the same treatment a rotating bonus gets, for the same reason.
+  describe('TD Cash waits for the cardholder to confirm their categories', () => {
+    const dining = purchase({
+      amountUsd: 100,
+      categoryId: getCategoryBySlug('dining').id,
+    });
+
+    it('pays only its 1% base rate until confirmed', () => {
+      const result = evaluate(['td-cash'], dining);
+
+      expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(1, 2);
+    });
+
+    it('pays 3% once confirmed', () => {
+      const result = evaluate(['td-cash'], dining, { activated: true });
+
+      expect(result.recommended?.breakdown.netValueUsd).toBeCloseTo(3, 2);
+    });
+  });
+
+  it.each([
+    'apple-card',
+    'td-cash',
+    'td-double-up',
+    'citi-costco-anywhere',
+    'fidelity-rewards',
+    'boa-unlimited-cash',
+  ])('%s is in the catalog and findable by search', (cardId) => {
+    const card = findMarketCard(cardId);
+
+    expect(card).not.toBeNull();
+    // Every one of these was re-read on the day it was added, not inherited from the
+    // batch before it.
+    expect(card?.ratesAsOf).toBe('2026-07-29');
+    expect(searchMarketCards(card?.productName ?? '').map((match) => match.id)).toContain(
+      cardId,
+    );
+  });
+});
+
 describe('the catalog is real, dated and checkable', () => {
   it('has cards from several issuers', () => {
     expect(MARKET_CARDS.length).toBeGreaterThan(15);

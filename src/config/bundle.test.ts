@@ -99,33 +99,31 @@ describe('the app bundle cannot contain a test file', () => {
     expect(routeCandidates).toContain('app/purchase.tsx');
   });
 
-  // There are none today: the three screen tests that made this necessary were deleted
-  // along with the screens they covered. The block list stays anyway, because the trap
-  // it closes is a property of Expo Router rather than of one commit — every `.tsx`
-  // under `app/` becomes a route, and the next person to colocate a screen test would
-  // otherwise ship the assertion library and break `expo start` again.
-  //
-  // So the check is now forward-looking: a test file placed under `app/` *would* be
-  // blocked. That is asserted against paths that do not exist, which is the point.
-  it.each([
-    'app/purchase.test.tsx',
-    'app/sign-in.test.tsx',
-    'app/nested/deep/screen.test.tsx',
-    'app/legacy.test.jsx',
-  ])('%s would be blocked if someone added it', (hypotheticalPath) => {
-    expect(isBlocked(hypotheticalPath)).toBe(true);
+  const testRoutes = routeCandidates.filter((path) => /\.test\.[tj]sx?$/.test(path));
+  const screenRoutes = routeCandidates.filter((path) => !/\.test\.[tj]sx?$/.test(path));
+
+  // Colocating a screen test beside its screen is allowed — that is the whole reason the
+  // block list exists rather than a rule saying "do not put tests here". Each one that
+  // does exist must be blocked.
+  it.each(testRoutes)('%s is blocked from the bundle', (path) => {
+    expect(isBlocked(path)).toBe(true);
   });
 
-  it('has no test files under app/ right now', () => {
-    // Recorded rather than required. If this ever fails, the app has colocated screen
-    // tests again — which is allowed, precisely because the block list above handles it.
-    expect(routeCandidates.filter((path) => /\.test\./.test(path))).toEqual([]);
-  });
+  // Asserted against paths that do not exist, so the guard holds for the next test file
+  // someone adds rather than only for today's. The trap is a property of Expo Router —
+  // every `.tsx` under `app/` becomes a route — not of one commit.
+  it.each(['app/purchase.test.tsx', 'app/nested/deep/screen.test.tsx', 'app/legacy.test.jsx'])(
+    '%s would be blocked if someone added it',
+    (hypotheticalPath) => {
+      expect(isBlocked(hypotheticalPath)).toBe(true);
+    },
+  );
 
   it('does not block the real screens', () => {
     // The negative control. A block list of `/./` would satisfy every assertion above
     // and ship an app with no routes at all.
-    for (const screen of routeCandidates) {
+    expect(screenRoutes.length).toBeGreaterThan(3);
+    for (const screen of screenRoutes) {
       expect(isBlocked(screen)).toBe(false);
     }
   });

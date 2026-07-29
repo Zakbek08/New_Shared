@@ -157,11 +157,26 @@ export default function ChooseCardsScreen() {
           testID="choose-cards-search"
         />
 
-        <Text variant="callout" tone="secondary" accessibilityRole="summary">
-          {chosenCount === 0
-            ? 'No cards in your wallet yet.'
-            : `${chosenCount} ${chosenCount === 1 ? 'card' : 'cards'} in your wallet.`}
-        </Text>
+        {/* Continue sits here, directly under the search box, rather than at the foot of
+            the list. With 28 cards the list is several screens long, so a button at the
+            bottom means scrolling past everything to leave — and the moment someone has
+            added a card, leaving is the thing they most want to do. */}
+        <VStack gap="xs">
+          <Text variant="callout" tone="secondary" accessibilityRole="summary">
+            {chosenCount === 0
+              ? 'No cards in your wallet yet. Add at least one to continue.'
+              : `${chosenCount} ${chosenCount === 1 ? 'card' : 'cards'} in your wallet.`}
+          </Text>
+          <Button
+            label={chosenCount === 0 ? 'Add a card to continue' : 'Continue'}
+            size="large"
+            fullWidth
+            disabled={chosenCount === 0}
+            onPress={() => router.replace('/purchase')}
+            accessibilityHint="Opens the purchase screen"
+            testID="choose-cards-continue"
+          />
+        </VStack>
 
         {/* Chosen cards first, so a long catalog does not bury what the user has done. */}
         {chosenCount > 0 ? (
@@ -212,15 +227,19 @@ export default function ChooseCardsScreen() {
           </VStack>
         </Card>
 
-        <Button
-          label={chosenCount === 0 ? 'Add at least one card to continue' : 'Continue'}
-          size="large"
-          fullWidth
-          disabled={chosenCount === 0}
-          onPress={() => router.replace('/purchase')}
-          accessibilityHint="Opens the purchase screen"
-          testID="choose-cards-continue"
-        />
+        {/* A second Continue at the foot, for anyone who did scroll the whole list. Only
+            shown once there is something to continue with, so an empty wallet gets one
+            call to action rather than two. */}
+        {chosenCount === 0 ? null : (
+          <Button
+            label="Continue"
+            size="large"
+            fullWidth
+            onPress={() => router.replace('/purchase')}
+            accessibilityHint="Opens the purchase screen"
+            testID="choose-cards-continue-bottom"
+          />
+        )}
       </VStack>
     </Screen>
   );

@@ -3,7 +3,7 @@
  * Walks the whole app in a real browser: sign in, choose cards, get a recommendation,
  * then reopen and confirm it remembered.
  *
- * WHY THIS EXISTS ALONGSIDE 1,295 UNIT TESTS
+ * WHY THIS EXISTS ALONGSIDE OVER A THOUSAND UNIT TESTS
  * Every one of those tests stubs something. None of them can answer the question a user
  * actually asks — can I open this and get an answer? The two defects this class of check
  * has already caught in this project were both invisible to unit tests: a config read
