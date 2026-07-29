@@ -55,8 +55,23 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, '127.0.0.1', r));
 
 const { chromium } = await import('playwright');
+
+/**
+ * Let Playwright find its own browser, unless told otherwise.
+ *
+ * An earlier version hardcoded a container-specific path
+ * (`/opt/pw-browsers/chromium-.../chrome`). It worked in the sandbox it was written in
+ * and failed on the first CI run with "executable doesn't exist" — a path that is
+ * correct on exactly one machine is not a path.
+ *
+ * `npx playwright install chromium` puts the browser where Playwright expects it, so the
+ * default resolution is right everywhere. The override exists for environments that
+ * pre-install Chromium somewhere else and set the variable to say so.
+ */
+const executablePath = process.env['PLAYWRIGHT_CHROMIUM_EXECUTABLE'];
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  ...(executablePath === undefined || executablePath === '' ? {} : { executablePath }),
+  // Required in containers, harmless on a CI runner.
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 const context = await browser.newContext({
