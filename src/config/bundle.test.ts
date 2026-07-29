@@ -92,29 +92,40 @@ describe('the app bundle cannot contain a test file', () => {
   const routeCandidates = filesUnder('app').filter((path) => /\.[tj]sx?$/.test(path));
 
   it('finds the route files, so a broken glob does not vacuously pass', () => {
-    // If this ever drops to zero the assertions below would all pass while checking
-    // nothing, which is the failure mode a guard like this is most prone to.
-    expect(routeCandidates.length).toBeGreaterThan(10);
+    // Seven: the layout, the gate, and five screens. If this ever drops to zero, every
+    // assertion below would pass while checking nothing — the failure mode a guard like
+    // this is most prone to.
+    expect(routeCandidates.length).toBeGreaterThanOrEqual(5);
+    expect(routeCandidates).toContain('app/purchase.tsx');
   });
 
-  const testRoutes = routeCandidates.filter((path) => /\.test\.[tj]sx?$/.test(path));
-
-  it('has test files colocated under app/, which is what makes this necessary', () => {
-    // Not an aspiration — a statement of the current layout. If these move out of `app/`
-    // the risk goes away and this suite should be deleted rather than left passing.
-    expect(testRoutes.length).toBeGreaterThan(0);
+  // There are none today: the three screen tests that made this necessary were deleted
+  // along with the screens they covered. The block list stays anyway, because the trap
+  // it closes is a property of Expo Router rather than of one commit — every `.tsx`
+  // under `app/` becomes a route, and the next person to colocate a screen test would
+  // otherwise ship the assertion library and break `expo start` again.
+  //
+  // So the check is now forward-looking: a test file placed under `app/` *would* be
+  // blocked. That is asserted against paths that do not exist, which is the point.
+  it.each([
+    'app/purchase.test.tsx',
+    'app/sign-in.test.tsx',
+    'app/nested/deep/screen.test.tsx',
+    'app/legacy.test.jsx',
+  ])('%s would be blocked if someone added it', (hypotheticalPath) => {
+    expect(isBlocked(hypotheticalPath)).toBe(true);
   });
 
-  it.each(testRoutes)('%s is blocked from the bundle', (path) => {
-    expect(isBlocked(path)).toBe(true);
+  it('has no test files under app/ right now', () => {
+    // Recorded rather than required. If this ever fails, the app has colocated screen
+    // tests again — which is allowed, precisely because the block list above handles it.
+    expect(routeCandidates.filter((path) => /\.test\./.test(path))).toEqual([]);
   });
 
   it('does not block the real screens', () => {
-    const screens = routeCandidates.filter((path) => !/\.test\.[tj]sx?$/.test(path));
-
-    // The negative control. A blockList of `/./` would satisfy every assertion above
+    // The negative control. A block list of `/./` would satisfy every assertion above
     // and ship an app with no routes at all.
-    for (const screen of screens) {
+    for (const screen of routeCandidates) {
       expect(isBlocked(screen)).toBe(false);
     }
   });
@@ -122,14 +133,18 @@ describe('the app bundle cannot contain a test file', () => {
   it('blocks test files under src/ too', () => {
     const sourceTests = filesUnder('src').filter((path) => /\.test\.[tj]sx?$/.test(path));
 
-    expect(sourceTests.length).toBeGreaterThan(0);
+    expect(sourceTests.length).toBeGreaterThan(10);
     for (const path of sourceTests) {
       expect(isBlocked(path)).toBe(true);
     }
   });
 
   it('does not block ordinary source files', () => {
-    for (const path of ['src/domain/rewards/evaluate.ts', 'src/lib/supabase.ts']) {
+    for (const path of [
+      'src/domain/rewards/evaluate.ts',
+      'src/data/marketCards.ts',
+      'src/features/local/storage.ts',
+    ]) {
       expect(isBlocked(path)).toBe(false);
     }
   });

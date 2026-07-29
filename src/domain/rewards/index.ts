@@ -62,25 +62,4 @@ export {
 
 export { resolveCentsPerUnit, valueRewardUsd } from './valuation';
 
-export {
-  CAP_ESTIMATE_DISCLAIMER,
-  CAP_WARNING_UTILISATION,
-  capAlerts,
-  capProgressForWallet,
-  type CapProgressEntry,
-  type CapStatus,
-} from './capProgress';
-
-export {
-  EXPIRY_WARNING_DAYS,
-  activeRotatingCategories,
-  expiringOffers,
-  pendingActivations,
-  shortfallForOffer,
-  type OfferExpiry,
-  type RotatingCategoryPeriod,
-} from './reminders';
-
-export { adjustedUsage, mergeUsage, usageDeltaFor, type UsageDelta } from './usage';
-
 export { assessConfidence, confidenceForVerification, weakest } from './confidence';
