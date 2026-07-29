@@ -665,6 +665,51 @@ The last three tests in the file delete `EXPO_PUBLIC_DEMO_MODE` and assert the s
 reach for the client. Without them, every test above would still pass if `isDemoMode()` were
 hard-wired to `true`, and the guard would be worthless.
 
+### Test files were being shipped inside the app
+
+Found by trying to run `expo start`, which is worth recording because no unit test could
+have caught it and the deployed preview had been carrying it.
+
+Expo Router builds its route table with `require.context(app/, /\.[tj]sx?$/)`. Every `.tsx`
+under `app/` is a route, and the only exclusions are the `+`-prefixed special files — test
+files are not excluded. So the three screen tests colocated beside their screens were
+registered as routes and bundled, dragging `@testing-library/react-native` and
+`react-test-renderer` behind them. Two consequences:
+
+- `expo start` **would not boot**. `react-test-renderer` is not a dependency of this app, so
+  the first screen rendered "Missing dev dependency" instead of WalletWise.
+- The published web build was **342 KB larger** (2,633,892 → 2,291,384 bytes, a 13%
+  reduction once fixed) and contained a Jest matcher surface it had no use for.
+
+`metro.config.js` now extends Metro's block list with `/\.test\.[tj]sx?$/`. Metro's own
+default already blocks `__tests__/` directories for precisely this reason, so the mechanism
+is the intended one — the default just assumes the directory convention rather than the
+suffix convention.
+
+Two guards, at different levels:
+
+| Guard                       | Asserts                                            | Cost    |
+| --------------------------- | -------------------------------------------------- | ------- |
+| `src/config/bundle.test.ts` | The resolved block list covers every test file     | ~1s     |
+| `scripts/check-bundle.mjs`  | The built artefact contains no matcher or renderer | a build |
+
+The Jest guard loads `metro.config.js` in a **Node subprocess**, because `expo/metro-config`
+pulls in `yaml`'s ESM, which jest-expo's transform will not process. That is deliberate
+rather than a workaround: asserting against the regex as source text would pass on a config
+that defined the right pattern and forgot to assign it to `resolver.blockList`, which is the
+mistake worth catching.
+
+Both were negative-controlled before being trusted. Reverting `metro.config.js` fails four
+of the eight Jest assertions and two of the artefact checks. That control also **removed a
+check**: `@testing-library/react-native` was a third artefact marker until the control showed
+it reported clean on a bundle that was demonstrably contaminated — the module name does not
+survive bundling even when its code does. A tick with nothing behind it is worse than no
+check, so it was deleted rather than kept for the reassurance.
+
+`bundle.test.ts` also asserts the block list does **not** match the real screens. A block
+list of `/./` would satisfy every other assertion in the suite and ship an app with no
+routes at all.
+
 ### A browser pass over the built bundle
 
 Unit tests stub the provenance query, so they cannot answer the only question that matters:
