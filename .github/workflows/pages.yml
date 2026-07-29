@@ -1,25 +1,15 @@
-# Publishes the WalletWise web build to GitHub Pages.
+# Publishes WalletWise to GitHub Pages.
 #
 # WHY THIS EXISTS
-# So the app can be looked at from a phone or a laptop without installing
-# anything. A development server is no use for that: it lives on whichever
-# machine started it, and dies with it. Pages is a static host, so the link keeps
-# working.
+# So the app can be used from a phone or a laptop without installing anything. A
+# development server is no use for that: it lives on whichever machine started it and
+# dies with it. Pages is a static host, so the link keeps working.
 #
-# WHAT IS PUBLISHED, AND WHAT IT CAN DO
-# The build sets EXPO_PUBLIC_DEMO_MODE, so the published app runs against the
-# bundled fictional wallet in `src/features/demo/`: no account, no backend, and the
-# whole purchase-to-recommendation flow usable. Every figure it shows is still
-# computed by the deterministic engine from rule records — demo mode changes where
-# the records come from, not the arithmetic.
-#
-# Adding repository secrets SUPABASE_URL and SUPABASE_ANON_KEY makes the build use a
-# real project for the Supabase URL and key. Note that demo mode would still take
-# precedence for data, so remove EXPO_PUBLIC_DEMO_MODE at that point.
-#
-# Nothing secret is involved either way. Only EXPO_PUBLIC_* variables reach a
-# bundle, and the Supabase anon key is public by design — row-level security is
-# what protects the data, not key secrecy. See SECURITY.md.
+# WHAT IS PUBLISHED
+# The whole app. There is nothing to configure and no backend to point at — the card
+# catalog is bundled and every figure is computed in the browser, so the published build
+# is fully functional on its own. A person's name and cards are saved in their own
+# browser's storage and never leave it.
 name: pages
 
 on:
@@ -27,14 +17,14 @@ on:
     branches: ['main']
   workflow_dispatch:
 
-# Least privilege: read the repo, write a Pages deployment, and nothing else.
+# Least privilege: read the repo, write a Pages deployment, nothing else.
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# One deployment at a time, and never cancel one in flight — a half-finished
-# deployment would leave the site broken.
+# One deployment at a time, and never cancel one in flight — a half-finished deployment
+# would leave the site broken.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -53,28 +43,17 @@ jobs:
 
       - run: npm ci
 
+      # `--offline` skips the Expo CLI's dependency-version check, which needs to reach
+      # Expo's servers and has nothing to do with building the bundle.
       - name: Export the web bundle
         env:
-          # A real project's values if they have been provided as secrets;
-          # otherwise placeholders that are long enough to pass validation and
-          # distinctive enough for check-bundle.mjs to prove inlining.
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder-not-a-real-project.supabase.co' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLXByZXZpZXciLCJyb2xlIjoiYW5vbiIsImV4cCI6MTk4MzEyMzQwMH0.preview-placeholder-not-a-real-signature' }}
-          EXPO_PUBLIC_ENVIRONMENT: development
-          EXPO_PUBLIC_ENABLE_DEMO_DATA: 'true'
-          # The published build runs entirely against the bundled fictional wallet,
-          # so it can be used without an account. getEnv() refuses this in a
-          # production build, so it cannot leak into a real release.
-          EXPO_PUBLIC_DEMO_MODE: 'true'
+          EXPO_OFFLINE: '1'
+          EXPO_PUBLIC_ENVIRONMENT: production
         run: npx expo export --platform web --output-dir dist
 
-      # The same guard the verify workflow runs. A published bundle with no
-      # configuration inlined would render a blank screen, which is precisely the
-      # defect this check exists to catch.
-      - name: Assert the configuration is inlined
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder-not-a-real-project.supabase.co' }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLXByZXZpZXciLCJyb2xlIjoiYW5vbiIsImV4cCI6MTk4MzEyMzQwMH0.preview-placeholder-not-a-real-signature' }}
+      # Expo Router turns every .tsx under app/ into a route, test files included, which
+      # once shipped 342 KB of assertion library to users.
+      - name: Assert no test code is in the bundle
         run: node scripts/check-bundle.mjs dist
 
       # Expo Router's web output is a single-page app: every route is served by
@@ -85,23 +64,20 @@ jobs:
         run: cp dist/index.html dist/404.html
 
       # Stops Pages running the output through Jekyll, which strips files and
-      # directories beginning with an underscore — and Expo puts everything in
-      # `_expo/`.
+      # directories beginning with an underscore — and Expo puts everything in `_expo/`.
       - name: Disable Jekyll processing
         run: touch dist/.nojekyll
 
       # NOT using `enablement: true`.
       #
-      # It looks like it would save a manual step, and it cannot: creating a Pages
-      # site needs a permission the workflow token does not have, whatever is
-      # written in `permissions:` above. The first attempt failed with
-      # "Create Pages site failed. Error: Resource not accessible by integration",
-      # and took the whole build down with it after every earlier step had
-      # succeeded.
+      # It looks like it would save a manual step, and it cannot: creating a Pages site
+      # needs a permission the workflow token does not have, whatever is written in
+      # `permissions:` above. The first attempt failed with "Create Pages site failed.
+      # Error: Resource not accessible by integration", and took the whole build down
+      # after every earlier step had succeeded.
       #
-      # So Pages is enabled once, by hand, in Settings → Pages → Source: GitHub
-      # Actions. After that this step just reads the existing configuration and
-      # every later deployment is automatic. See PREVIEW.md.
+      # So Pages is enabled once, by hand, in Settings → Pages → Source: GitHub Actions.
+      # After that this step just reads the existing configuration.
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

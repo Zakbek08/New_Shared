@@ -1,48 +1,30 @@
-# WalletWise CI
+# Every check that guards a change to WalletWise.
 #
-# Four jobs, deliberately separate so a failure names its own cause rather than
+# Three jobs, deliberately separate so a failure names its own cause rather than
 # "CI is red":
 #
-#   verify   format, lint, typecheck, unit tests, coverage thresholds
-#   database the RLS matrix and the cap-window cross-check, against real Postgres
-#   bundle   builds the app and proves its configuration is inlined
-#   smoke    boots the built bundle in a browser and checks it mounts
+#   verify   format, lint, typecheck, unit tests with coverage thresholds
+#   bundle   exports the web bundle and proves no test code leaked into it
+#   flow     drives the whole four-step flow in a real browser
 #
-# The last two exist because of a specific defect. `src/config/env.ts` read
-# process.env through a computed key; Metro could not inline it, the app could not
-# boot in any real build, and all 1,844 unit tests passed anyway because Jest runs
-# in Node where dynamic access works. A green unit suite is not a running app, so
-# CI builds and boots it. See TESTING.md.
+# There is no database job any more, and no Supabase configuration anywhere. The app
+# has no backend: the card catalog is bundled and every figure is computed on the
+# device, so there is nothing to connect to and nothing to configure.
 name: verify
 
 on:
   push:
     branches: ['main', 'claude/**']
   pull_request:
-  # Manual runs, for re-checking after a base-branch fix without an empty commit.
+    branches: ['main']
   workflow_dispatch:
-
-# A new push supersedes an in-flight run on the same ref. Never cancel on main:
-# there, the run is the record of whether that commit was good.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
 
-env:
-  # Public-by-design placeholders, and the standard local-stack values. Real
-  # secrets never appear here: only EXPO_PUBLIC_* reaches a bundle, so anything
-  # in this block is public by construction (SECURITY.md requirement 4).
-  #
-  # The URL and key must be long and distinctive, because check-bundle.mjs proves
-  # inlining by finding them in the built output — a short value would match by
-  # coincidence and prove nothing.
-  EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder-project.supabase.co
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ3YWxsZXR3aXNlLWNpIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODMxMjM0MDB9.ci-placeholder-not-a-real-signature
-  EXPO_PUBLIC_ENVIRONMENT: test
-  EXPO_PUBLIC_ENABLE_DEMO_DATA: 'true'
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -54,27 +36,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Matches the engines field in package.json.
           node-version: 22
           cache: npm
 
-      # `ci` not `install`: it fails on a package-lock that disagrees with
-      # package.json, which is the point of committing the lock file.
       - run: npm ci
 
       - name: Prettier
         run: npm run format:check
 
       - name: ESLint
-        # Includes the credential-name rules from eslint.config.mjs, so a
-        # `cardNumber` identifier fails the build here.
         run: npm run lint
 
       - name: TypeScript
         run: npm run typecheck
 
-      # Coverage rather than a plain test run, so the thresholds in
-      # jest.config.js are enforced and not merely configured.
       - name: Unit tests and coverage thresholds
         run: npm run test:coverage -- --ci
 
@@ -84,10 +59,11 @@ jobs:
         with:
           name: coverage
           path: coverage/
+          if-no-files-found: ignore
           retention-days: 7
 
-  database:
-    name: RLS and cap-window, on real Postgres
+  bundle:
+    name: bundle, and prove no test code shipped
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -100,56 +76,18 @@ jobs:
 
       - run: npm ci
 
-      # scripts/db-test.mjs builds its own throwaway cluster with initdb, so it
-      # needs the server binaries, not a running service. Ubuntu runners ship
-      # PostgreSQL, but the version moves; this asserts what we got rather than
-      # assuming, because a silent absence would make the script exit 1 with an
-      # install message and look like a script bug.
-      - name: Locate PostgreSQL server binaries
-        run: |
-          set -euo pipefail
-          found=""
-          for dir in /usr/lib/postgresql/*/bin; do
-            if [ -x "$dir/initdb" ]; then found="$dir"; fi
-          done
-          if [ -z "$found" ]; then
-            echo "No PostgreSQL server binaries on the runner; installing."
-            sudo apt-get update
-            sudo apt-get install -y postgresql
-            for dir in /usr/lib/postgresql/*/bin; do
-              if [ -x "$dir/initdb" ]; then found="$dir"; fi
-            done
-          fi
-          echo "Using $found"
-          "$found/initdb" --version
-
-      - name: Row-level security matrix and cap-window cross-check
-        run: npm run test:db
-
-  bundle:
-    name: bundle, and prove the config is inlined
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # Walks the entire import graph, which the unit suite does not: every test
-      # mocks its dependencies. A broken import or a missing package fails here.
+      # `--offline` skips the Expo CLI's dependency-version check, which needs to reach
+      # Expo's servers and is not what this job is testing.
       - name: Export the web bundle
+        env:
+          EXPO_OFFLINE: '1'
+          EXPO_PUBLIC_ENVIRONMENT: development
         run: npx expo export --platform web --output-dir dist
 
-      # The regression guard for the boot-blocking defect. env.test.ts checks the
-      # *shape* of the reads in source; this checks the *outcome* in the artefact,
-      # which is what would catch a change in Metro or babel-preset-expo that
-      # breaks inlining without touching env.ts.
-      - name: Assert the configuration is inlined
+      # Expo Router turns every .tsx under app/ into a route, including test files,
+      # which once shipped 342 KB of assertion library to users. metro.config.js blocks
+      # them; this asserts the outcome against the built artefact.
+      - name: Assert no test code is in the bundle
         run: node scripts/check-bundle.mjs dist
 
       - name: Upload the bundle
@@ -159,11 +97,11 @@ jobs:
           path: dist/
           retention-days: 7
 
-  smoke:
-    name: boot the bundle in a browser
+  flow:
+    name: walk the whole flow in a browser
+    needs: bundle
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: bundle
     steps:
       - uses: actions/checkout@v4
 
@@ -179,31 +117,21 @@ jobs:
           name: web-bundle
           path: dist
 
-      # Browsers only — the `playwright` module itself is a devDependency, so
-      # `npm ci` above provides it. Installing the CLI with `npx playwright@x.y.z`
-      # instead does NOT put the module in node_modules, which is exactly how the
-      # first run of this job failed: the script's `import('playwright')` threw and
-      # it reported "Playwright is not installed".
-      #
-      # No version pin here on purpose: npx resolves the locally installed
-      # playwright, so the browser build always matches the module.
+      # Unpinned on purpose: it must match the Playwright the lockfile installed, and
+      # naming a version here is how those two drift apart.
       - name: Install the Chromium build matching the installed Playwright
         run: npx playwright install --with-deps chromium
 
-      # Serves the bundle and asserts the app mounts with no uncaught error.
-      # "It compiled" and "it runs" are different claims; this makes the second
-      # one testable.
-      - name: Boot and assert it mounts
-        run: node scripts/smoke-web.mjs dist
+      # The check no unit test can make: sign in, add cards, ask for a recommendation,
+      # then reopen the app and confirm it remembers.
+      - name: Sign in, choose cards, get a recommendation, reopen
+        run: node scripts/flow-check.mjs dist flow-screenshots
 
-      - name: Upload the screenshot
+      - name: Upload the screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: boot-screenshot
-          path: smoke/
-          retention-days: 7
-          # The script writes smoke/ only once the browser has launched, so a
-          # failure before that legitimately leaves nothing to upload. Warning
-          # about it buries the real error.
+          name: flow-screenshots
+          path: flow-screenshots/
           if-no-files-found: ignore
+          retention-days: 7

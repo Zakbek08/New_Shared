@@ -44,10 +44,9 @@ if (bundleDir === undefined) {
  * key legitimately has nothing to inline, and demanding it would fail a build
  * that is correct.
  */
-const REQUIRED = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'];
+const REQUIRED = [];
 const OPTIONAL = [
   'EXPO_PUBLIC_ENVIRONMENT',
-  'EXPO_PUBLIC_ENABLE_DEMO_DATA',
   'EXPO_PUBLIC_ANALYTICS_WRITE_KEY',
   'EXPO_PUBLIC_ERROR_MONITORING_DSN',
 ];

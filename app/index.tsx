@@ -1,84 +1,39 @@
 /**
- * Screen 1 — Splash.
+ * The gate. Decides which screen a person lands on, and renders nothing itself.
  *
- * Brand moment plus the two statements a first-time user most needs to see:
- * WalletWise never takes a payment, and never asks for card credentials.
+ * Three states, in order:
  *
- * Phase 2 replaces the manual buttons with an automatic redirect based on the
- * Supabase session.
+ *   no profile              → sign in
+ *   profile but no cards    → choose cards
+ *   both                    → start a purchase
+ *
+ * That last line is the whole point of the app remembering anything: a returning user
+ * goes straight to the only screen they came here to use.
+ *
+ * WHY THIS WAITS FOR `isReady`
+ * The decision is invalid until storage has been read, and storage is asynchronous. A
+ * redirect on the first render would send a returning user to the sign-in screen for a
+ * frame before correcting itself — visible, alarming, and the single most annoying bug
+ * this kind of app can have. So it holds a neutral loading state instead of guessing.
  */
-import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Redirect } from 'expo-router';
 
-import { NO_CREDENTIALS_DISCLAIMER, NO_PAYMENT_DISCLAIMER } from '@/components/Disclaimers';
-import { Button } from '@/components/ui/Button';
+import { LoadingState } from '@/components/StateViews';
 import { Screen } from '@/components/ui/Screen';
-import { VStack } from '@/components/ui/Stack';
-import { Text } from '@/components/ui/Text';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useLocalStore } from '@/features/local/LocalStore';
 
-export default function SplashScreen() {
-  const router = useRouter();
-  const theme = useTheme();
+export default function IndexScreen() {
+  const { isReady, profile, wallet } = useLocalStore();
 
-  return (
-    <Screen accessibilityLabel="WalletWise welcome" testID="splash-screen">
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <VStack gap="xxl">
-          <VStack gap="sm">
-            {/* A wordmark, not a logo lifted from anyone else. */}
-            <Text variant="display" accessibilityRole="header">
-              WalletWise
-            </Text>
-            <Text variant="title3" tone="accent">
-              Which card should you use?
-            </Text>
-            <Text variant="body" tone="secondary">
-              Tell WalletWise what you are buying and it works out which card in your wallet
-              earns you the most on that purchase.
-            </Text>
-          </VStack>
+  if (!isReady) {
+    return (
+      <Screen accessibilityLabel="Starting WalletWise" testID="gate-loading">
+        <LoadingState label="Starting WalletWise" testID="gate-loading-state" />
+      </Screen>
+    );
+  }
 
-          <View
-            accessible
-            accessibilityRole="summary"
-            accessibilityLabel={`${NO_PAYMENT_DISCLAIMER} ${NO_CREDENTIALS_DISCLAIMER}`}
-            style={{
-              backgroundColor: theme.colors.surfaceSunken,
-              borderRadius: theme.radii.md,
-              padding: theme.spacing.lg,
-              gap: theme.spacing.sm,
-            }}
-          >
-            <Text variant="callout" tone="secondary">
-              {NO_PAYMENT_DISCLAIMER}
-            </Text>
-            <Text variant="callout" tone="secondary">
-              {NO_CREDENTIALS_DISCLAIMER}
-            </Text>
-          </View>
-        </VStack>
-      </View>
-
-      <VStack gap="md" style={{ paddingBottom: theme.spacing.xxl }}>
-        <Button
-          label="Create an account"
-          size="large"
-          fullWidth
-          onPress={() => router.push('/(auth)/register')}
-          accessibilityHint="Opens the registration form"
-          testID="splash-register"
-        />
-        <Button
-          label="I already have an account"
-          variant="ghost"
-          size="large"
-          fullWidth
-          onPress={() => router.push('/(auth)/sign-in')}
-          accessibilityHint="Opens the sign in form"
-          testID="splash-sign-in"
-        />
-      </VStack>
-    </Screen>
-  );
+  if (profile === null) return <Redirect href="/sign-in" />;
+  if (wallet.cardIds.length === 0) return <Redirect href="/choose-cards" />;
+  return <Redirect href="/purchase" />;
 }

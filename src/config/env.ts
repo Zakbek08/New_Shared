@@ -1,26 +1,22 @@
 /**
  * Validated environment configuration.
  *
- * Secrets live in environment variables, never in source. See `.env.example`.
+ * WalletWise has no backend, so this module has very little left to do — and that is
+ * worth stating rather than leaving as an absence. There is no database URL, no API key
+ * and no anon key, because there is nothing to connect to: the card catalog is bundled
+ * and every figure is computed on the device.
  *
- * IMPORTANT: only `EXPO_PUBLIC_*` variables are inlined into the bundle by
- * Metro, which means every value read here ships to the device and must be
- * treated as public. Anything genuinely secret (service-role keys, model API
- * keys) belongs in a Supabase Edge Function's secret store and is deliberately
- * unreachable from this module.
+ * What remains is the build's own identity plus two optional telemetry endpoints, all
+ * of which are legitimately blank in a normal build.
+ *
+ * IMPORTANT: only `EXPO_PUBLIC_*` variables are inlined into the bundle by Metro, which
+ * means every value read here ships to the device and must be treated as public.
+ * Nothing genuinely secret may ever be read from this module.
  */
 import { z } from 'zod';
 
 const environmentSchema = z.object({
-  supabaseUrl: z
-    .url('EXPO_PUBLIC_SUPABASE_URL must be a full URL')
-    .refine((value) => value.startsWith('https://') || value.startsWith('http://localhost'), {
-      message: 'Supabase must be reached over https, except for a local dev stack',
-    }),
-  supabaseAnonKey: z.string().min(20, 'EXPO_PUBLIC_SUPABASE_ANON_KEY looks wrong'),
   environment: z.enum(['development', 'staging', 'production', 'test']),
-  enableDemoData: z.boolean(),
-  demoMode: z.boolean(),
   analyticsWriteKey: z.string().nullable(),
   errorMonitoringDsn: z.string().nullable(),
 });
@@ -32,39 +28,30 @@ export type Environment = z.infer<typeof environmentSchema>;
  *
  * EVERY VARIABLE IS WRITTEN OUT LONGHAND, AND THAT IS LOAD-BEARING.
  * Metro inlines `EXPO_PUBLIC_*` by syntactically replacing each static
- * `process.env.SOME_NAME` member expression with a string literal at build time.
- * A helper that takes the variable name as an argument — `readRaw(name)` reading
+ * `process.env.SOME_NAME` member expression with a string literal at build time. A
+ * helper that takes the variable name as an argument — `readRaw(name)` reading
  * `process.env[name]` — is invisible to that transform. Nothing gets substituted,
  * `process.env` is an empty object on Hermes and on the web, and the app throws
  * "Invalid environment configuration" on boot with a correct `.env` right there.
  *
- * That is not a hypothetical: it is what this function used to do, and it made
- * every real build unstartable while all of the unit tests passed, because Jest
- * runs in Node where `process.env` is genuinely populated and dynamic access
- * works. `env.test.ts` now asserts the shape of these reads for that reason.
+ * That is not a hypothetical: it is what this function used to do, and it made every
+ * real build unstartable while all of the unit tests passed, because Jest runs in Node
+ * where `process.env` is genuinely populated and dynamic access works. `env.test.ts`
+ * asserts the shape of these reads for that reason.
  *
  * So: no loops, no computed keys, no clever table of names. One line each.
- * `src/config/env.d.ts` declares them so dot access satisfies
+ * `src/types/env.d.ts` declares them so dot access satisfies
  * `noPropertyAccessFromIndexSignature`.
  *
- * Read inside a function rather than at module scope so `resetEnvCache()` can
- * force a genuine re-read.
+ * Read inside a function rather than at module scope so `resetEnvCache()` can force a
+ * genuine re-read.
  */
 function readRawEnvironment(): Readonly<Record<string, string | undefined>> {
   return {
-    EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-    EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     EXPO_PUBLIC_ENVIRONMENT: process.env.EXPO_PUBLIC_ENVIRONMENT,
-    EXPO_PUBLIC_ENABLE_DEMO_DATA: process.env.EXPO_PUBLIC_ENABLE_DEMO_DATA,
-    EXPO_PUBLIC_DEMO_MODE: process.env.EXPO_PUBLIC_DEMO_MODE,
     EXPO_PUBLIC_ANALYTICS_WRITE_KEY: process.env.EXPO_PUBLIC_ANALYTICS_WRITE_KEY,
     EXPO_PUBLIC_ERROR_MONITORING_DSN: process.env.EXPO_PUBLIC_ERROR_MONITORING_DSN,
   };
-}
-
-function readBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value === '') return fallback;
-  return value === 'true' || value === '1';
 }
 
 function readOptional(value: string | undefined): string | null {
@@ -78,45 +65,28 @@ function readString(value: string | undefined, fallback = ''): string {
 /**
  * Reads and validates the environment.
  *
- * Throws on invalid configuration rather than limping along with a broken
- * client — a misconfigured Supabase URL is not something to discover three
- * screens later. The error message deliberately names only the *variable*, never
- * the value, so a bad key cannot leak into a crash report.
+ * `environment` defaults to `development`, so the app starts with no `.env` at all —
+ * which is the normal case now that there is nothing to configure. A build that wants
+ * to be a release has to say so.
+ *
+ * The error message deliberately names only the *variable*, never the value, so a bad
+ * setting cannot leak into a crash report.
  */
 function loadEnvironment(): Environment {
   const raw = readRawEnvironment();
 
   const candidate = {
-    supabaseUrl: readString(raw['EXPO_PUBLIC_SUPABASE_URL']),
-    supabaseAnonKey: readString(raw['EXPO_PUBLIC_SUPABASE_ANON_KEY']),
     environment: readString(raw['EXPO_PUBLIC_ENVIRONMENT'], 'development'),
-    enableDemoData: readBoolean(raw['EXPO_PUBLIC_ENABLE_DEMO_DATA'], true),
-    // Defaults to OFF. A demo build has to ask for it explicitly; forgetting the
-    // variable can only ever produce the real app, never the fictional one.
-    demoMode: readBoolean(raw['EXPO_PUBLIC_DEMO_MODE'], false),
     analyticsWriteKey: readOptional(raw['EXPO_PUBLIC_ANALYTICS_WRITE_KEY']),
     errorMonitoringDsn: readOptional(raw['EXPO_PUBLIC_ERROR_MONITORING_DSN']),
   };
-
-  // Demo mode replaces the backend with a bundled fictional wallet. In a
-  // production build that would mean showing invented cards to a real user, so it
-  // is refused rather than warned about. The check lives here, at the only place
-  // configuration is read, so there is no way around it.
-  if (candidate.demoMode && candidate.environment === 'production') {
-    throw new Error(
-      'EXPO_PUBLIC_DEMO_MODE must not be enabled in a production build. ' +
-        'Demo mode serves a fictional wallet with no backend.',
-    );
-  }
 
   const parsed = environmentSchema.safeParse(candidate);
   if (!parsed.success) {
     const fields = parsed.error.issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
       .join('; ');
-    throw new Error(
-      `Invalid environment configuration (${fields}). Copy .env.example to .env and fill it in.`,
-    );
+    throw new Error(`Invalid environment configuration (${fields}).`);
   }
 
   return parsed.data;
@@ -136,29 +106,3 @@ export function resetEnvCache(): void {
 }
 
 export const isProduction = (): boolean => getEnv().environment === 'production';
-
-/**
- * Whether the fictional demo catalog is in play. When true the UI must show the
- * demonstration-data banner, because the rates on screen are invented.
- */
-export const isDemoDataEnabled = (): boolean => getEnv().enableDemoData;
-
-/**
- * Whether the app is running as a self-contained demonstration.
- *
- * When true there is no backend and no sign-in: the wallet, the card catalog and
- * the merchant list all come from a bundled fictional snapshot
- * (`src/features/demo/`), and nothing is written anywhere. It exists so the app
- * can be shown to someone without asking them to create an account.
- *
- * WHAT THIS DOES NOT CHANGE, AND MUST NEVER CHANGE
- * The reward figures are still produced by the deterministic engine in
- * `src/domain/rewards/` from validated rule records. Demo mode swaps the *source*
- * of those records, not the arithmetic. No number shown to a user is invented by
- * the demo layer, because a plausible fake figure in a financial app is worse
- * than an obvious gap — see CLAUDE.md.
- *
- * It is refused outright in production (see `loadEnvironment`), so it cannot be
- * switched on by accident in a real build.
- */
-export const isDemoMode = (): boolean => getEnv().demoMode;

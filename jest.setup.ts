@@ -1,31 +1,27 @@
 /**
- * Global Jest setup.
- *
- * Phase 1 keeps this deliberately small: deterministic environment values and
- * mocks for the native modules that would otherwise touch a real device.
+ * Global Jest setup: a deterministic environment, and mocks for the two native modules
+ * that would otherwise reach for a bridge that does not exist under Jest.
  */
 import '@testing-library/react-native';
 
-// Deterministic, obviously-fake values. Never place real credentials here.
-process.env['EXPO_PUBLIC_SUPABASE_URL'] = 'http://localhost:54321';
-process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key-not-a-real-secret';
 process.env['EXPO_PUBLIC_ENVIRONMENT'] = 'test';
 
-jest.mock('expo-secure-store', () => {
-  const store = new Map<string, string>();
-  return {
-    isAvailableAsync: jest.fn(() => Promise.resolve(true)),
-    getItemAsync: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
-    setItemAsync: jest.fn((key: string, value: string) => {
-      store.set(key, value);
-      return Promise.resolve();
-    }),
-    deleteItemAsync: jest.fn((key: string) => {
-      store.delete(key);
-      return Promise.resolve();
-    }),
-  };
-});
+/**
+ * AsyncStorage's own in-memory mock.
+ *
+ * Used rather than hand-rolled, because the library ships a mock that matches its own
+ * semantics — including the ones easy to get wrong by hand, like `multiGet` returning
+ * key/value pairs and a missing key resolving to `null` rather than throwing.
+ *
+ * `require` rather than an import, because `jest.mock`'s factory is hoisted above the
+ * import statements and so cannot close over an ESM binding. The lint rule is disabled
+ * for this file in `eslint.config.mjs` for exactly that reason.
+ *
+ * It is genuinely in-memory, so `storage.test.ts` clears it between tests.
+ */
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({

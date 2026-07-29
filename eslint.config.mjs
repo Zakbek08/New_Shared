@@ -103,6 +103,10 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/unbound-method': 'off',
+      // `jest.mock`'s factory is hoisted above the import statements, so it cannot
+      // close over an ESM binding — `require` is the only form that works inside one.
+      // Scoped to test setup and test files, where that hoisting is the whole point.
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 );

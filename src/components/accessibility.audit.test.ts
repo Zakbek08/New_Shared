@@ -80,7 +80,12 @@ describe('the audit covers the files it claims to', () => {
   it('found components in every tree', () => {
     // Guards the guard. A path typo would otherwise make every test below pass
     // by examining nothing.
-    expect(componentFiles.length).toBeGreaterThan(25);
+    //
+    // The floor was 25 when the app carried seventeen screens and a server-backed
+    // admin surface. It is 15 now that the app is six screens over local storage.
+    // Lowered because the premise changed, not because the check was inconvenient:
+    // its job is to catch a path typo returning nothing, and 15 still does that.
+    expect(componentFiles.length).toBeGreaterThan(15);
     expect(componentFiles.some((file) => file.name.startsWith('components/'))).toBe(true);
     expect(componentFiles.some((file) => file.name.startsWith('features/'))).toBe(true);
     expect(componentFiles.some((file) => file.name.startsWith('app/'))).toBe(true);
@@ -221,17 +226,43 @@ describe('reduced motion', () => {
 });
 
 describe('headings', () => {
+  /**
+   * Files under `app/` that are not screens a person reads.
+   *
+   * `_layout` composes the navigator. `index` is the routing gate: it renders a
+   * loading state and a `<Redirect>`, and nothing else — there is no content for a
+   * heading to head, and adding one would announce a landmark on a screen that
+   * exists for a single frame.
+   *
+   * Named individually rather than pattern-matched, so a real screen cannot become
+   * exempt by accident.
+   */
+  const NOT_READABLE_SCREENS = ['app/_layout.tsx', 'app/index.tsx'];
+
   it('gives every screen a heading a screen reader can jump to', () => {
     // Without a header role, a reader has no landmark and must traverse the
     // screen linearly from the top.
     const screens = componentFiles.filter(
-      (file) => file.name.startsWith('app/') && !file.name.includes('_layout'),
+      (file) => file.name.startsWith('app/') && !NOT_READABLE_SCREENS.includes(file.name),
     );
+
+    // Guards the exemption list: if it ever swallowed every screen, the assertion
+    // below would pass while checking nothing.
+    expect(screens.length).toBeGreaterThan(3);
 
     const offenders = screens.filter(
       (file) => !file.source.includes('accessibilityRole="header"'),
     );
 
     expect(offenders.map((file) => file.name)).toEqual([]);
+  });
+
+  it('the exempt files really do render no readable content', () => {
+    // The exemption is only defensible while it stays true. `index.tsx` earns it by
+    // redirecting; if it grew a real UI, this fails and the exemption comes out.
+    const gate = componentFiles.find((file) => file.name === 'app/index.tsx');
+
+    expect(gate).toBeDefined();
+    expect(gate?.source).toContain('Redirect');
   });
 });
