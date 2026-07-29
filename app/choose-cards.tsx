@@ -23,7 +23,7 @@ import { Divider, HStack, VStack } from '@/components/ui/Stack';
 import { Text } from '@/components/ui/Text';
 import { TextField } from '@/components/ui/TextField';
 import { Toggle } from '@/components/ui/Toggle';
-import { searchMarketCards, type MarketCard } from '@/data/marketCards';
+import { findMarketCard, searchMarketCards, type MarketCard } from '@/data/marketCards';
 import { useLocalStore } from '@/features/local/LocalStore';
 import { formatDay, formatUsdCompact } from '@/lib/format';
 
@@ -158,7 +158,7 @@ export default function ChooseCardsScreen() {
         />
 
         {/* Continue sits here, directly under the search box, rather than at the foot of
-            the list. With 28 cards the list is several screens long, so a button at the
+            the list. With 29 cards the list is several screens long, so a button at the
             bottom means scrolling past everything to leave — and the moment someone has
             added a card, leaving is the thing they most want to do. */}
         <VStack gap="xs">
@@ -186,10 +186,14 @@ export default function ChooseCardsScreen() {
                 In your wallet
               </Text>
               {wallet.cardIds.map((id) => {
-                const card = results.find((candidate) => candidate.id === id);
+                // Looked up in the whole catalog, not in `results`. `results` is filtered
+                // by the search box, so a card the current query excludes would fall
+                // through to the raw id — "citi-costco-anywhere" instead of "Costco
+                // Anywhere Visa". This list is about what you hold, not what you searched.
+                const card = findMarketCard(id);
                 return (
                   <Text key={id} variant="callout">
-                    ✓ {card?.productName ?? id}
+                    ✓ {card === null ? id : `${card.issuerName} ${card.productName}`}
                   </Text>
                 );
               })}

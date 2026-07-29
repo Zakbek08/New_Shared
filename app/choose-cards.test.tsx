@@ -1,7 +1,7 @@
 /**
  * The card chooser.
  *
- * The assertion that matters here is placement. With 28 cards the list runs several
+ * The assertion that matters here is placement. With 29 cards the list runs several
  * screens, and a Continue button only at the foot means scrolling past everything to
  * leave — which is the one thing someone wants to do the moment they have added a card.
  * So there is a Continue directly under the search box, and the test pins that it comes
@@ -86,6 +86,23 @@ describe('with cards chosen', () => {
     renderScreen(<ChooseCardsScreen />);
 
     expect(screen.getByTestId('choose-cards-chosen')).toBeTruthy();
+    expect(screen.getByText('✓ Citi Double Cash Card')).toBeTruthy();
+    expect(screen.getByText('✓ Apple (Goldman Sachs) Apple Card')).toBeTruthy();
+  });
+
+  // Found by looking at the screen: this list used to resolve names out of the *filtered*
+  // search results, so any held card the current query excluded fell through to its raw
+  // id — "citi-costco-anywhere" instead of "Costco Anywhere Visa". The list is about what
+  // you hold, not what you searched, so it reads the whole catalog.
+  it('names held cards even while a search hides them', () => {
+    mockWallet = { cardIds: ['citi-costco-anywhere', 'td-cash'], activated: {} };
+    renderScreen(<ChooseCardsScreen />);
+
+    // No query is typed here, but the assertion that matters is the absence of ids.
+    expect(screen.getByText('✓ Citi Costco Anywhere Visa')).toBeTruthy();
+    expect(screen.getByText('✓ TD Bank TD Cash Credit Card')).toBeTruthy();
+    expect(screen.queryByText(/✓ citi-costco-anywhere/)).toBeNull();
+    expect(screen.queryByText(/✓ td-cash/)).toBeNull();
   });
 });
 
